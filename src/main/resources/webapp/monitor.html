@@ -1,0 +1,51 @@
+<!--
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+-->
+<!DOCTYPE html>
+<html>
+<head>
+  <title>${service.name}</title>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="refresh" content="2" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="-1" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto">
+</head>
+<body>
+  <h1>${service.name}</h1>
+  <div id="info">
+    <ul>
+      <li>Version: ${build.version}</li>
+      <li>Uptime: ${service.uptime}</li>
+      <li>Memory: Used ${memory.used} - Allocated ${memory.allocated} - Max ${memory.max}</li>
+    </ul>
+  </div>
+  <div>
+    <ul>
+      <li>Now: ${now}</li>
+    </ul>
+  </div>
+
+  <h3>Active Tasks</h3>
+  <pre>${active.tasks}</pre>
+
+  <h3>Slow Tasks blocking everyone</h3>
+  <pre>${slow.tasks}</pre>
+
+  <h3>Recently Completed Tasks</h3>
+  <pre>${recently.completed.tasks}</pre>
+</body>
+</html>

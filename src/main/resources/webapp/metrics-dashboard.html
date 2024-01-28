@@ -1,0 +1,791 @@
+<!--
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+-->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js" integrity="sha512-EmNxF3E6bM0Xg1zvmkeYD3HDBeGxtsG92IxFt1myNZhXdCav9MzvuH/zNMBU1DmIPN6njrhX1VTbqdJxQ2wHDg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gridstack.js/10.0.1/gridstack-all.min.js" integrity="sha512-gq8R31XSsOjp58K9qre4n5inuaUuAkz36qmdVx9Y1VpGtzmx06JlnVGLEDMISZH1Kh/M2X4Iip40WPD94kQW2w==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/gridstack.js/10.0.1/gridstack.min.css" integrity="sha512-RQiZSqRhRB5xAwqOKws34d14fPNaxoy59RNAUl2KXtT+5XfmspdKoNo1C2hR1bunSSLd4wNOz1bYcZjvuzN0hg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <style type="text/css">
+    body {
+      font-family: 'Roboto', serif;
+    }
+
+    table { border-collapse: collapse; width: 100%; font-size: 10px; }
+    td, th { padding: 3px 3px; text-align: right; }
+    th.item-label { cursor: move; }
+    td.row-key { overflow-wrap: anywhere; text-align: left; }
+    th:not(:last-child), td:not(:last-child) { border-right: 1px solid #ddd; }
+    tr:nth-child(even) { background-color: #f2f2f2; }
+    tr:hover { background-color: #ddd; }
+
+    .grid-wrap { width: 100%; margin: auto; }
+    .grid-stack-item-content { border: 1px solid #999; }
+    .grid-stack > .grid-stack-item > .ui-resizable-se {
+      width: 6px;
+      height: 6px;
+      transform: none;
+      background-image: none;
+      border-right: 2px solid #555;
+      border-bottom: 2px solid #555;
+    }
+    .grid-stack > .grid-stack-item > .ui-resizable-sw {
+      width: 6px;
+      height: 6px;
+      transform: none;
+      background-image: none;
+      border-left: 2px solid #555;
+      border-bottom: 2px solid #555;
+    }
+
+    .item {
+      width: 100%; height: 100%;
+      .item-label {
+        height: 14px;
+        font-size: 10px;
+        font-weight: bold;
+        text-align: center;
+        padding-left: 4px;
+        background: #eee;
+        border-bottom: 1px solid #999;
+        cursor: move;
+      }
+      .item-body {
+        height: calc(100% - 15px);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div style="display: flex; margin: 2px 8px;">
+    <div style="width: 30%;">
+      <span id="refreshTime"></span> - <span id="metricsCount"></span>
+    </div>
+    <div style="width: 70%;">
+      <input id="search" type="search" style="width: 100%;" />
+    </div>
+  </div>
+  <div class="grid-wrap">
+    <div class="grid-stack"></div>
+  </div>
+
+  <script type="module">
+    const demoTheme = {
+      color: [
+        '#5E93FF', // Series color 1
+        '#67CC90', // Series color 2
+        '#FFA663', // Series color 3
+        '#6C7CFF', // Series color 4
+        '#FF7A6A', // Series color 5
+        '#7FABF7', // Series color 6
+        '#FFBE53', // Series color 7
+        '#8C96A1', // Series color 8
+        '#69707A', // Series color 9
+        '#8EB33B', // Series color 10
+      ],
+      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+      textStyle: { color: '#333' },
+      title: { textStyle: { color: '#333' } },
+      legend: { textStyle: { color: '#666' }, },
+      tooltip: { axisPointer: { lineStyle: { color: '#666' }, crossStyle: { color: '#666' } }, },
+      axisPointer: { lineStyle: { color: '#666' }, crossStyle: { color: '#666' } },
+      toolbox: { iconStyle: { borderColor: '#666' } },
+      dataZoom: { borderColor: 'rgba(102, 102, 102, 0.3)', dataBackground: { color: 'rgba(255, 255, 255, 0.1)' }, fillerColor: 'rgba(128, 128, 128, 0.2)' },
+      timeline: { lineStyle: { color: '#666' }, itemStyle: { color: '#5E93FF' }, controlStyle: { normal: { color: '#666' } } },
+    };
+
+    echarts.registerTheme('demoTheme', demoTheme);
+    const charts = {};
+    const gridElements = {};
+    const grid = GridStack.init({
+      float: false,
+      column: 12,
+      cellHeight: 40,
+      margin: 4,
+      handle: '.item-label',
+      alwaysShowResizeHandle: true,
+      resizable: {
+        handles: 'sw,se'
+      }
+    });
+
+    function debounce(timeout, func){
+      let timer;
+      return (...args) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => { func.apply(this, args); }, timeout);
+      };
+    }
+
+    const search = debounce(300, (event) => {
+      const searchItems = searchBox.value.split('|').map(k => k.trim()).filter(k => k);
+      for (const [key, elem] of Object.entries(gridElements)) {
+        let matches = searchItems.length == 0;
+        for (const searchItem of searchItems) {
+          if (searchItem && key.includes(searchItem)) {
+            matches = true;
+            break;
+          }
+        }
+
+        const node = elem.parentNode.parentNode;
+        if (matches) {
+          grid.addWidget(node);
+        } else {
+          grid.removeWidget(node);
+        }
+      }
+      grid.compact();
+    });
+
+    const searchBox = document.getElementById('search');
+    searchBox.addEventListener('search', (event) => search(event));
+    searchBox.addEventListener('keyup', (event) => search(event));
+
+    function newChart(name, label, options) {
+      let chart = charts[name];
+      if (chart) {
+        chart.setOption(options);
+        return;
+      }
+
+      grid.addWidget({w: 4, h: 5, content: `<div id="${name}" class="metric item"><div class="item-label">${label}</div><div id="chart-${name}" class="item-body"></div></div>`});
+      gridElements[name] = document.getElementById(name);
+
+      const nodeChart = document.getElementById('chart-' + name);
+
+      chart = echarts.init(nodeChart, 'demoTheme');
+      chart.setOption(options);
+      window.addEventListener('resize', function() { chart.resize(); });
+      charts[name] = chart;
+
+      const resizeObserver = new ResizeObserver(entries => chart.resize());
+      resizeObserver.observe(nodeChart);
+    }
+
+    function buildDateTimeLabels(lastInterval, window, count) {
+      const items = [];
+      const firstTs = lastInterval - (window * count);
+      for (let i = 0; i < count; i++) {
+        const d = new Date(firstTs + (i * window));
+        const m = d.getMinutes();
+        items.push(d.getHours() + ':' + (m > 10 ? m : '0' + m));
+      }
+      return items;
+    }
+
+    function renderTimeRangeCounter(metric) {
+      const metricData = metric.data;
+      const humanConverter = METRIC_UNIT_CONVERTER[metric.unit];
+      newChart(metricKey(metric), metric.label, {
+        animation: false,
+        grid: { left: 50, top: 15, right: 10, bottom: 42 },
+        xAxis: {
+          type: 'category',
+          axisLabel: { fontSize: 8 },
+          splitLine: { show: true, lineStyle: { type: 'dashed' } },
+          data: buildDateTimeLabels(metricData.lastInterval, metricData.window, metricData.counters.length),
+        },
+        yAxis: {
+          type: 'value',
+          minInterval: 1,
+          splitLine: { show: true, lineStyle: { type: 'dashed' } },
+          axisLabel: { fontSize: 8, formatter: (value) => humanConverter(value) },
+        },
+        tooltip: {
+          trigger: 'axis',
+          confine: true,
+          padding: 4,
+          position: 'inside',
+          axisPointer: { type: 'shadow' },
+          textStyle: { fontSize: 11 },
+          formatter: (data) => {
+            let text = '<b>' + humanConverter(data[0].value) + '</b> ' + metric.label + '<br>';
+            text += '<b> ' + new Date(metricData.lastInterval - ((metricData.counters.length - data[0].dataIndex) * metricData.window)).toLocaleString() + '</b>';
+            return text;
+          }
+        },
+        dataZoom: [{ show: true, realtime: true, height: 14, bottom: 10, textStyle: { fontSize: 8 } }],
+        series: [
+          { type: 'bar', name: metric.name, data: metricData.counters }
+        ]
+      });
+    }
+
+    function renderMaxAvgTimeRangeGauge(metric) {
+      const metricData = metric.data;
+      const humanConverter = METRIC_UNIT_CONVERTER[metric.unit];
+      newChart(metricKey(metric), metric.label, {
+        animation: false,
+        grid: { left: 50, top: 15, right: 10, bottom: 42 },
+        xAxis: {
+          type: 'category',
+          axisLabel: { fontSize: 8 },
+          splitLine: { show: true, lineStyle: { type: 'dashed' } },
+          data: buildDateTimeLabels(metricData.lastInterval, metricData.window, metricData.count.length)
+        },
+        yAxis: {
+          type: 'value',
+          minInterval: 1,
+          splitLine: { show: true, lineStyle: { type: 'dashed' } },
+          axisLabel: { fontSize: 8, formatter: (value) => humanConverter(value) }
+        },
+        tooltip: {
+          trigger: 'axis',
+          confine: true,
+          padding: 4,
+          position: 'inside',
+          axisPointer: { type: 'shadow' },
+          textStyle: { fontSize: 11 },
+          formatter: (data) => {
+            const dataIndex = data[0].dataIndex;
+            let text = metric.label + '<br>';
+            text += '<b>' + new Date(metricData.lastInterval - ((metricData.count.length - dataIndex) * metricData.window)).toLocaleString() + '</b>';
+            text += '<br><b>' + humanCount(metricData.count[dataIndex]) + '</b> events, sum <b>' + humanConverter(metricData.sum[dataIndex]) + '</b>';
+            for (let i = 0; i < data.length; ++i) {
+              const v = data[i];
+              text += '<br>' + v.marker + v.seriesName + ': <b>' + humanConverter(v.value) + '</b>';
+            }
+            return text;
+          }
+        },
+        dataZoom: [{ show: true, realtime: true, height: 14, bottom: 10, textStyle: { fontSize: 8 } }],
+        series: [
+          {
+            name: 'max',
+            type: 'line',
+            itemStyle: {},
+            areaStyle: {opacity: 0.8 },
+            lineStyle: { width: 1 },
+            emphasis: { focus: 'series' },
+            showSymbol: false,
+            data: metricData.max
+          },
+          {
+            name: 'avg',
+            type: 'line',
+            itemStyle: {},
+            areaStyle: { opacity: 0.8 },
+            lineStyle: { width: 1 },
+            emphasis: { focus: 'series' },
+            showSymbol: false,
+            data: metricData.count.map((v, index) => (v > 0) ? (metricData.sum[index] / v) : 0)
+          },
+        ]
+      });
+    }
+
+    function renderHistogram(metric) {
+      const metricData = metric.data;
+      if (!metricData.bounds || metricData.bounds.length == 0) {
+        console.debug('no data for metric', metric.name);
+        return;
+      }
+
+      const humanConverter = METRIC_UNIT_CONVERTER[metric.unit];
+      const bounds = metricData.bounds.map(v => humanConverter(v));
+      newChart(metricKey(metric), metric.label, {
+        animation: false,
+        grid: { left: 50, top: 20, right: 15, bottom: 20 },
+        xAxis: {
+          type: 'category',
+          axisLabel: { fontSize: 8 },
+          splitLine: { show: true, lineStyle: { type: 'dashed' } },
+          data: bounds
+        },
+        yAxis: {
+          type: 'value',
+          minInterval: 1,
+          splitLine: { show: true, lineStyle: { type: 'dashed' } },
+          axisLabel: { fontSize: 8, formatter: (value) => humanCount(value) }
+        },
+        tooltip: {
+          trigger: 'axis',
+          confine: true,
+          padding: 4,
+          position: 'inside',
+          axisPointer: { type: 'shadow' },
+          textStyle: { fontSize: 11 },
+          formatter: (data) => {
+            let text = metric.label + '<br>';
+            text += '<b>' + humanCount(data[0].value) + '</b> events of ';
+            text += '<b>' + humanConverter(metricData.bounds[data[0].dataIndex]) + '</b>';
+            return text;
+          }
+        },
+        series: [
+          { type: 'bar', name: metric.name, data: metricData.events }
+        ]
+      });
+    }
+
+    function renderHeatmap(metric) {
+      // { lastInterval, window, bounds, events: [...] }
+      const metricData = metric.data;
+      if (!metricData.bounds || metricData.bounds.length == 0) {
+        console.debug('no data for metric', metric.name);
+        return;
+      }
+
+      const humanConverter = METRIC_UNIT_CONVERTER[metric.unit];
+      const bounds = metricData.bounds.map(v => humanConverter(v));
+
+      let minEvents = Number.MAX_VALUE;
+      let maxEvents = 0;
+      const data = [];
+      const events = metricData.events;
+      const numIntervals = events.length / bounds.length;
+      for (let i = 0; i < events.length; ++i) {
+        const x = Math.trunc(i / bounds.length);
+        const y = i % bounds.length;
+        data.push([x, y, events[i] || '-']);
+        maxEvents = Math.max(maxEvents, events[i] || 0);
+        if (events[i] >= 1) {
+          minEvents = Math.min(minEvents, events[i]);
+        }
+      }
+      if (minEvents >= maxEvents) {
+        minEvents = 0;
+      }
+
+      newChart(metricKey(metric), metric.label, {
+        animation: false,
+        grid: { left: 50, top: 5, right: 5, bottom: 35 },
+        tooltip: {
+          confine: true,
+          padding: 4,
+          textStyle: { fontSize: 11 },
+          formatter: (data) => {
+            let text = metric.label + '<br>';
+            text += new Date(metricData.lastInterval - ((numIntervals - data.value[0]) * metricData.window)).toLocaleString();
+            text += '<br><b>' + humanCount(data.value[2]) + '</b> events of <b>' + bounds[data.value[1]] + '</b>';
+            return text;
+          }
+        },
+        xAxis: {
+          type: 'category',
+          data: buildDateTimeLabels(metricData.lastInterval, metricData.window, numIntervals),
+          axisLabel: { fontSize: 8 },
+          splitArea: { show: true }
+        },
+        yAxis: {
+          type: 'category',
+          data: bounds,
+          minInterval: 1,
+          axisLabel: { fontSize: 8 },
+          splitArea: { show: true }
+        },
+        visualMap: {
+          formatter: (a, b) => humanCount(a) + '-' + humanCount(b),
+          textStyle: { fontSize: 8 },
+          type: 'piecewise',
+          orient: 'horizontal',
+          left: 'center',
+          min: minEvents,
+          max: maxEvents,
+          calculable: true,
+          realtime: false,
+
+          splitNumber: 8,
+          itemSymbol: 'circle',
+          itemHeight: 8,
+          itemWidth: 8,
+          itemGap: 8,
+          textGap: 3,
+          bottom: 0,
+        },
+        series: [{
+          name: metric.label,
+          type: 'heatmap',
+          data: data,
+          label: { show: false, fontSize: 5, formatter: v => humanCount(v.value[2]) },
+          itemStyle: { borderWidth: 0.5, borderColor: '#888' },
+          emphasis: {
+            itemStyle: {
+              borderColor: '#333',
+              borderWidth: 1,
+              shadowBlur: 10,
+              shadowColor: 'rgba(0, 0, 0, 0.5)'
+            }
+          }
+        }]
+      });
+    }
+
+    function renderHeatmapTimeRangeGauge(metric) {
+      const metricData = metric.data;
+      const humanConverter = METRIC_UNIT_CONVERTER[metric.unit];
+      const bounds = metricData.bounds.map(v => humanConverter(v));
+
+      const events = metricData.events;
+      const numIntervals = events.length / bounds.length;
+
+      const p75 = [];
+      const p99 = [];
+      for (let i = 0; i < numIntervals; ++i) {
+        let numEvents = 0;
+        for (let b = 0; b < bounds.length; ++b) {
+          numEvents += events[b + (bounds.length * i)];
+        }
+
+        const thresholds = [numEvents * 0.75, numEvents * 0.99];
+        const pValue = [-1, -1];
+        let cumulativeSum = 0;
+        for (let b = 0; b < bounds.length; ++b) {
+          const bucketValue = events[b + (bounds.length * i)];
+          cumulativeSum += bucketValue;
+          for (let t = 0; t < thresholds.length; ++t) {
+            const threshold = thresholds[t];
+            if (pValue[t] >= 0) continue;
+
+            if (cumulativeSum >= threshold) {
+              const leftPoint = (b == 0) ? metricData.minValue[i] : metricData.bounds[b - 1];
+              const rightPoint = metricData.bounds[b];
+              const leftSum = cumulativeSum - bucketValue;
+              const rightLeftDiff = cumulativeSum - leftSum;
+              const pos = (rightLeftDiff != 0) ? (threshold - leftSum) / rightLeftDiff : 0;
+              let r = leftPoint + (rightPoint - leftPoint) * pos;
+              if (r < metricData.minValue[i]) r = metricData.minValue[i];
+              if (r > metricData.maxValue[i]) r = metricData.maxValue[i];
+              pValue[t] = r;
+            }
+          }
+        }
+
+        p75.push(Math.round(pValue[0]));
+        p99.push(Math.round(pValue[1]));
+      }
+
+      newChart(metricKey(metric) + '_perc', metric.label, {
+        animation: false,
+        grid: { left: 50, top: 15, right: 10, bottom: 42 },
+        xAxis: {
+          type: 'category',
+          axisLabel: { fontSize: 8 },
+          splitLine: { show: true, lineStyle: { type: 'dashed' } },
+          data: buildDateTimeLabels(metricData.lastInterval, metricData.window, numIntervals)
+        },
+        yAxis: {
+          type: 'value',
+          minInterval: 1,
+          splitLine: { show: true, lineStyle: { type: 'dashed' } },
+          axisLabel: { fontSize: 8, formatter: (value) => humanConverter(value) }
+        },
+        tooltip: {
+          trigger: 'axis',
+          confine: true,
+          padding: 4,
+          position: 'inside',
+          axisPointer: { type: 'shadow' },
+          textStyle: { fontSize: 11 },
+          formatter: (data) => {
+            const dataIndex = data[0].dataIndex;
+            let text = metric.label + '<br>';
+            text += '<b>' + new Date(metricData.lastInterval - ((numIntervals - dataIndex) * metricData.window)).toLocaleString() + '</b>';
+            text += '<br><b>' + humanCount(metricData.events[dataIndex]) + '</b> events, sum <b>' + humanConverter(metricData.sum[dataIndex]) + '</b>';
+            for (let i = 0; i < data.length; ++i) {
+              const v = data[i];
+              text += '<br>' + v.marker + v.seriesName + ': <b>' + humanConverter(v.value) + '</b>';
+            }
+            return text;
+          }
+        },
+        dataZoom: [{ show: true, realtime: true, height: 14, bottom: 10, textStyle: { fontSize: 8 } }],
+        series: [
+          {
+            name: 'max',
+            type: 'line',
+            itemStyle: {},
+            areaStyle: {opacity: 0.8 },
+            lineStyle: { width: 1 },
+            emphasis: { focus: 'series' },
+            showSymbol: false,
+            data: metricData.maxValue
+          },
+          {
+            name: 'p99',
+            type: 'line',
+            itemStyle: {},
+            areaStyle: { opacity: 0.8 },
+            lineStyle: { width: 1 },
+            emphasis: { focus: 'series' },
+            showSymbol: false,
+            data: p99
+          },
+          {
+            name: 'p75',
+            type: 'line',
+            itemStyle: {},
+            areaStyle: { opacity: 0.8 },
+            lineStyle: { width: 1 },
+            emphasis: { focus: 'series' },
+            showSymbol: false,
+            data: p75
+          },
+        ]
+      });
+    }
+
+    function renderTopK(metric) {
+      const metricData = metric.data;
+      if (!metricData.entries || metricData.entries.length == 0) {
+        console.debug('no data for metric', metric.name);
+        return;
+      }
+
+      const name = metricKey(metric);
+      let node = gridElements[name];
+      if (node) {
+        while (node.hasChildNodes()) {
+          node.removeChild(node.firstChild);
+        }
+      } else {
+        const label = metric.label;
+        grid.addWidget({w: 8, h: 5, content: `<div id="${name}" class="metric item"></div>`});
+        node = document.getElementById(name);
+        gridElements[name] = node;
+      }
+
+      const nodeTable = document.createElement("table");
+      node.appendChild(nodeTable);
+
+      const humanConverter = METRIC_UNIT_CONVERTER[metric.unit];
+      const columnNames = [metric.label, 'Max Timestamp', 'Max', 'Min', 'Avg', 'StdDev', 'Freq', 'Sum'];
+      const columnKeys = {
+        'key': (row, k) => k.replaceAll('\n', ' '),
+        'maxTimestamp': (row, t) => new Date(t).toLocaleString(),
+        'maxValue': (row, v) => humanConverter(v),
+        'minValue': (row, v) => humanConverter(v),
+        'avg': (row, v) => humanConverter(Math.round(row['sum'] / row['count'])),
+        'stdDev': (row, v) => {
+          const variance = (row.sumSquares * row.count - row.sum * row.sum) / (row.count * row.count);
+          const stdDev = Math.sqrt(Math.max(variance, 0.0));
+          return humanConverter(Math.round(stdDev));
+        },
+        'count': (row, v) => humanCount(v),
+        'sum': (row, v) => humanConverter(v),
+      };
+      const nodeHeader = document.createElement("tr");
+      nodeTable.append(nodeHeader);
+      for (const column of columnNames) {
+        const nodeTh = document.createElement("th");
+        nodeTh.className = 'item-label';
+        nodeTh.innerText = column;
+        nodeHeader.appendChild(nodeTh);
+      }
+      for (const row of metric.data.entries) {
+        const nodeRow = document.createElement("tr");
+        nodeTable.append(nodeRow);
+
+        for (const key in columnKeys) {
+          const keyConverter = columnKeys[key];
+          let nodeTh = document.createElement("td");
+          nodeTh.className = 'row-' + key;
+          nodeTh.innerText = keyConverter(row, row[key]);
+          nodeRow.appendChild(nodeTh);
+        }
+      }
+    }
+
+    function renderCounter(metric) {
+      const humanConverter = METRIC_UNIT_CONVERTER[metric.unit];
+      newChart(metricKey(metric), metric.label, {
+        animation: false,
+        grid: { left: 0, top: 0, right: 0, bottom: 0 },
+        series: [{
+          name: metric.label,
+          type: 'gauge',
+          detail: {
+            valueAnimation: true,
+            fontSize: 12,
+            offsetCenter: [0, '70%'],
+            formatter: value => humanConverter(value)
+          },
+          progress: { show: true, width: 2 },
+          axisLine: { lineStyle: { width: 2 } },
+          axisTick: { show: false },
+          splitLine: { length: 5, lineStyle: { width: 1, color: '#999' } },
+          axisLabel: { distance: 6, fontSize: 8, color: '#999' },
+          anchor: { show: true, showAbove: true, size: 10, itemStyle: { borderWidth: 2 } },
+          title: { show: false },
+          data: [ { value: metric.data.value, name: metric.name } ]
+        }]
+      });
+    }
+
+    function renderCounterMap(metric) {
+      const metricData = metric.data;
+      if (!metricData.keys || metricData.keys.length == 0) {
+        console.debug('no data for metric', metric.name);
+        return;
+      }
+
+      const humanConverter = METRIC_UNIT_CONVERTER[metric.unit];
+      newChart(metricKey(metric), metric.label, {
+        animation: false,
+        grid: { left: 50, top: 4, right: 15, bottom: 30 },
+        tooltip: {
+          confine: true,
+          padding: 4,
+          position: 'inside',
+          textStyle: { fontSize: 11 },
+          formatter: (data) => {
+            const v = data.data;
+            console.log('tooltip', data, v);
+            let text = metric.label + '<br>';
+            text += '<b>' + humanConverter(v.value) + '</b>: ' + v.name;
+            return text;
+          }
+        },
+        textStyle: { fontSize: 8 },
+        series: [{
+          name: metric.name,
+          type: 'treemap',
+          data: metricData.keys.map((v, index) => ({ name: v, value: metricData.values[index] })),
+          breadcrumb: {
+            height: 12,
+            itemStyle: { textStyle: { fontSize: 8 } }
+          }
+        }]
+      });
+    }
+
+    function humanBytes(size) {
+      if (size >= 1099511627776) return (size / 1099511627776).toFixed(2) + 'TiB';
+      if (size >= 1073741824) return (size / 1073741824).toFixed(2) + 'GiB';
+      if (size >= 1048576) return (size / 1048576).toFixed(2) + 'MiB';
+      if (size >= 1024) return (size / 1024).toFixed(2) + 'KiB';
+      if (size == 1 || size == 0) return size + 'byte';
+      return Math.round(size) + 'bytes';
+    }
+
+    function humanCount(count) {
+      if (count >= 1000000) return (count / 1000000).toFixed(2) + 'M';
+      if (count >= 1000) return (count / 1000).toFixed(2) + 'K';
+      return count.toFixed(0);
+    }
+
+    function humanNanos(nanos) {
+      if (nanos < 1000) return Math.round(nanos) + 'ns';
+      return humanMicros(nanos / 1000);
+    }
+
+    function humanMicros(usec) {
+      if (usec < 1000) return Math.round(usec) + 'us';
+      return humanMillis(usec / 1000);
+    }
+
+    function humanMillis(msec) {
+      if (msec < 1000) {
+        return Math.round(msec) + 'ms';
+      }
+
+      const hours = Math.floor(msec / (60 * 60 * 1000));
+      let rem = (msec % (60 * 60 * 1000));
+      const minutes = Math.floor(rem / (60 * 1000));
+      rem = rem % (60 * 1000);
+      const seconds = rem / 1000.0;
+
+      if ((hours > 0) || (minutes > 0)) {
+        const buf = [];
+        if (hours > 0) {
+          buf.push(hours.toFixed(0));
+          buf.push("hrs, ");
+        }
+        if (minutes > 0) {
+          buf.push(minutes.toFixed(0));
+          buf.push("min, ");
+        }
+
+        let humanTime;
+        if (seconds > 0) {
+          buf.push(seconds.toFixed(2));
+          buf.push("sec");
+          humanTime = buf.join('');
+        } else {
+          const sbuf = buf.join('');
+          humanTime = sbuf.substring(0, sbuf.length - 2);
+        }
+
+        if (hours > 24) {
+          const ndays = (hours / 24.0).toFixed(1);
+          return `${humanTime} (${ndays} days)`;
+        }
+        return humanTime;
+      }
+
+      return ((seconds % 1) != 0 ? seconds.toFixed(2) : seconds.toFixed(0)) + 'sec';
+    }
+
+    const METRIC_UNIT_CONVERTER = {
+      'BYTES': humanBytes,
+      'COUNT': humanCount,
+      'NANOSECONDS': humanNanos,
+      'MICROSECONDS': humanMicros,
+      'MILLISECONDS': humanMillis,
+      'PERCENT': v => v + '%',
+    };
+
+    const METRIC_RENDERERS = {
+      'TIME_RANGE_COUNTER': [renderTimeRangeCounter],
+      'MAX_AVG_TIME_RANGE_GAUGE': [renderMaxAvgTimeRangeGauge],
+      'HISTOGRAM': [renderHistogram],
+      'HEATMAP': [renderHeatmap, renderHeatmapTimeRangeGauge],
+      'TOPK': [renderTopK],
+      'COUNTER': [renderCounter],
+      'COUNTER_MAP': [renderCounterMap],
+    };
+
+    function metricKey(metric) {
+      let metric_key = metric.name;
+      const dimensions = metric.dimensions;
+      if (dimensions) {
+        for (const key of Object.keys(dimensions).sort()) {
+          const val = dimensions[key];
+          metric_key += '/' + key + '/' + val;
+        }
+      }
+      return metric_key;
+    }
+
+    async function fetchMetrics(jsonMetricsUrl) {
+      const response = await fetch(jsonMetricsUrl);
+      const metrics = await response.json();
+      document.getElementById('refreshTime').innerText = new Date().toLocaleString();
+      document.getElementById('metricsCount').innerText = metrics.length + ' metrics';
+      for (const metric of metrics.sort((a, b) => a.name.localeCompare(b.name))) {
+        const renderers = METRIC_RENDERERS[metric.type];
+        if (!renderers) {
+          console.log('unsupported metric type', metric.type, metric);
+          continue;
+        }
+
+        for (const r of renderers) {
+          r(metric);
+        }
+      }
+    }
+
+    const JSON_METRICS_URL = './data';
+    //const JSON_METRICS_URL = 'http://localhost:57025/runtime/metrics/data';
+    fetchMetrics(JSON_METRICS_URL);
+    setInterval(async () => await fetchMetrics(JSON_METRICS_URL), 5_000);
+  </script>
+</body>
+</html>
