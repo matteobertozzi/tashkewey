@@ -20,6 +20,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,11 +39,26 @@ import io.github.matteobertozzi.rednaco.dispatcher.annotations.uri.UriMapping;
 import io.github.matteobertozzi.rednaco.dispatcher.annotations.uri.UriPrefix;
 import io.github.matteobertozzi.rednaco.dispatcher.message.Message;
 import io.github.matteobertozzi.rednaco.dispatcher.message.MessageUtil;
+import io.github.matteobertozzi.rednaco.plugins.ServicePlugin;
+import io.github.matteobertozzi.rednaco.plugins.ServicePluginRegistry;
 import io.github.matteobertozzi.rednaco.strings.HumansUtil;
 import io.github.matteobertozzi.rednaco.strings.TemplateUtil;
+import io.github.matteobertozzi.rednaco.util.BuildInfo;
 
 @UriPrefix("/runtime")
 public class MetricsHandlers {
+  @InlineFast
+  @AllowPublicAccess
+  @UriMapping(uri = "/modules")
+  public List<BuildInfo> modules() {
+    final Collection<ServicePlugin> plugins = ServicePluginRegistry.INSTANCE.getPlugins();
+    final ArrayList<BuildInfo> buildInfo = new ArrayList<>(plugins.size());
+    for (final ServicePlugin plugin: plugins) {
+      buildInfo.add(plugin.buildInfo());
+    }
+    return buildInfo;
+  }
+
   @InlineFast
   @AllowPublicAccess
   @UriMapping(uri = "/metrics")

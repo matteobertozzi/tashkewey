@@ -69,7 +69,7 @@ import io.netty.handler.codec.http.cors.CorsHandler;
 import io.netty.handler.stream.ChunkedWriteHandler;
 
 public class HttpService extends AbstractService {
-  private static final int DEFAULT_MAX_HTTP_REQUEST_SIZE = (4 << 20);
+  private static final int DEFAULT_MAX_HTTP_REQUEST_SIZE = (32 << 20);
 
   private final MessageDispatcher dispatcher;
   private final CorsConfig corsConfig;
@@ -77,6 +77,10 @@ public class HttpService extends AbstractService {
 
   public HttpService(final MessageDispatcher dispatcher) {
     this(dispatcher, DEFAULT_MAX_HTTP_REQUEST_SIZE, null);
+  }
+
+  public HttpService(final MessageDispatcher dispatcher, final boolean enableCors) {
+    this(dispatcher, DEFAULT_MAX_HTTP_REQUEST_SIZE, enableCors, new String[0]);
   }
 
   public HttpService(final MessageDispatcher dispatcher,

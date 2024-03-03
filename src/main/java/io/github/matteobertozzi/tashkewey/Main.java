@@ -17,13 +17,14 @@
 
 package io.github.matteobertozzi.tashkewey;
 
-import java.util.ArrayList;
-import java.util.Collections;
+import java.nio.file.Path;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import io.github.matteobertozzi.easerinsights.EaserInsights;
+import io.github.matteobertozzi.easerinsights.influx.InfluxLineExporter;
 import io.github.matteobertozzi.easerinsights.jvm.JvmMetrics;
 import io.github.matteobertozzi.easerinsights.logging.Logger;
 import io.github.matteobertozzi.easerinsights.logging.providers.AsyncTextLogWriter;
@@ -38,9 +39,7 @@ import io.github.matteobertozzi.rednaco.data.JsonFormat;
 import io.github.matteobertozzi.rednaco.dispatcher.MessageDispatcher;
 import io.github.matteobertozzi.rednaco.dispatcher.routing.RouteBuilder;
 import io.github.matteobertozzi.rednaco.dispatcher.routing.RoutesRegistration;
-import io.github.matteobertozzi.rednaco.plugins.ServicePlugin;
 import io.github.matteobertozzi.rednaco.plugins.ServicePluginRegistry;
-import io.github.matteobertozzi.rednaco.strings.HumansTableView;
 import io.github.matteobertozzi.rednaco.strings.HumansUtil;
 import io.github.matteobertozzi.rednaco.strings.StringUtil;
 import io.github.matteobertozzi.rednaco.threading.ShutdownUtil;
@@ -48,6 +47,7 @@ import io.github.matteobertozzi.rednaco.threading.StripedLock.Cell;
 import io.github.matteobertozzi.rednaco.threading.ThreadUtil;
 import io.github.matteobertozzi.rednaco.time.TimeUtil;
 import io.github.matteobertozzi.rednaco.util.BuildInfo;
+import io.github.matteobertozzi.tashkewey.Config.InfluxTelegrafConfig;
 import io.github.matteobertozzi.tashkewey.auth.HttpAuthSessionProvider;
 import io.github.matteobertozzi.tashkewey.eloop.ServiceEventLoop;
 import io.github.matteobertozzi.tashkewey.network.NettyBufAllocatorMetrics;
@@ -63,41 +63,12 @@ public final class Main {
     // no-op
   }
 
-  record PluginServiceInitTime(String name, long loadTime) {}
   private static void loadPluginServices(final RouteBuilder routeBuilder, final MessageDispatcher dispatcher, final Set<String> modules) throws Exception {
-    final long startTime = System.nanoTime();
-
-    final ArrayList<PluginServiceInitTime> pluginInitTimes = new ArrayList<>();
-
-    Logger.info("scanning for plugins. configured modules: {}", modules);
-    for (final ServicePlugin plugin: ServicePluginRegistry.INSTANCE.scanPlugins()) {
-      if (!modules.contains(plugin.serviceName())) {
-        Logger.info("plugin available, but not configured to be loaded: {}", plugin.serviceName());
-        continue;
-      }
-
-      Logger.info("loading feature: {}", plugin.serviceName());
-      final long pluginInitStartTime = System.nanoTime();
-      if (!ServicePluginRegistry.INSTANCE.load(plugin)) {
-        continue;
-      }
-
+    ServicePluginRegistry.INSTANCE.loadPluginServices(modules, plugin -> {
       if (plugin instanceof final RoutesRegistration routesRegistration) {
         routesRegistration.registerRoutes(routeBuilder, dispatcher);
       }
-
-      final long elapsed = System.nanoTime() - pluginInitStartTime;
-      pluginInitTimes.add(new PluginServiceInitTime(plugin.serviceName(), elapsed));
-      Logger.info("plugin '{}' init took {}", plugin.serviceName(), HumansUtil.humanTimeNanos(elapsed));
-    }
-
-    Collections.sort(pluginInitTimes, (a, b) -> Long.compare(b.loadTime(), a.loadTime()));
-    final HumansTableView tableView = new HumansTableView();
-    tableView.addColumns("plugin name", "load time");
-    for (final PluginServiceInitTime entry: pluginInitTimes) {
-      tableView.addRow(entry.name(), HumansUtil.humanTimeNanos(entry.loadTime()));
-    }
-    Logger.info("plugin services init took {}", HumansUtil.humanTimeSince(startTime));
+    });
   }
 
   private static void loadServices(final MessageDispatcher dispatcher, final Set<String> modules) throws Exception {
@@ -142,7 +113,9 @@ public final class Main {
 
   public static void main(final String[] args) throws Throwable {
     final long startTime = System.nanoTime();
-    try (AsyncTextLogWriter asyncLogWriter = new AsyncTextLogWriter(System.out, 8192)) {
+    final Config config = new Config();
+
+    try (final AsyncTextLogWriter asyncLogWriter = new AsyncTextLogWriter(System.out, 8192)) {
       if (IS_AWS_SYS) {
         Logger.setLogProvider(new JsonLogProvider(v -> Main.printJsonLine(asyncLogWriter, v)));
       } else {
@@ -153,30 +126,49 @@ public final class Main {
       Tracer.setTraceProvider(BasicTracer.INSTANCE);
       //NettyLoggerFactory.initializeNettyLogger();
 
+      for (int i = 0; i < args.length; ++i) {
+        switch (args[i]) {
+          case "-c" -> {
+            final Path configFile = Path.of(args[++i]);
+            Logger.debug("loading config: {}", configFile);
+            config.load(configFile);
+          }
+        }
+      }
+
       final BuildInfo buildInfo = BuildInfo.fromManifest("tashkewey");
       JvmMetrics.INSTANCE.setBuildInfo(buildInfo);
       Logger.debug("starting {}", buildInfo);
 
       final AtomicBoolean running = new AtomicBoolean(true);
-      try (ServiceEventLoop eloop = new ServiceEventLoop(1, 0)) {
-        eloop.getWorkerGroup().scheduleAtFixedRate(Main::collectMetrics, 1, 15, TimeUnit.SECONDS);
-
-        final ExecutorService defaultTaskExecutor = eloop.addUnorderedWorkerGroup("DefaultTaskExecutor", 0);
-
-        final MessageDispatcher dispatcher = new MessageDispatcher(defaultTaskExecutor);
-        dispatcher.setAuthSessionProvider(new HttpAuthSessionProvider());
-        loadServices(dispatcher, Set.of(args));
-
-        final HttpService http = new HttpService(dispatcher, 1 << 20, true, new String[0]);
-        http.bindTcpService(eloop, 57025);
-        ShutdownUtil.addShutdownHook("services", running, http);
-
-        Logger.info("service up and running: {}", HumansUtil.humanTimeSince(startTime));
-        while (running.get()) {
-          ThreadUtil.sleep(2, TimeUnit.SECONDS);
+      try (EaserInsights insights = EaserInsights.INSTANCE.open()) {
+        for (final InfluxTelegrafConfig influxConfig: config.influxConfig()) {
+          insights.addExporter(
+            InfluxLineExporter.newInfluxExporter(influxConfig.url(), influxConfig.token())
+              .addDefaultDimensions(influxConfig.defaultDimensions())
+          );
         }
 
-        http.waitStopSignal();
+        try (ServiceEventLoop eloop = new ServiceEventLoop(1, 0)) {
+          eloop.getWorkerGroup().scheduleAtFixedRate(Main::collectMetrics, 1, 15, TimeUnit.SECONDS);
+
+          final ExecutorService defaultTaskExecutor = eloop.addWorkerGroup("DefaultTaskExecutor", 0);
+
+          final MessageDispatcher dispatcher = new MessageDispatcher(defaultTaskExecutor);
+          dispatcher.setAuthSessionProvider(new HttpAuthSessionProvider());
+          loadServices(dispatcher, config.modules());
+
+          final HttpService http = new HttpService(dispatcher, true);
+          http.bindTcpService(eloop, 57025);
+          ShutdownUtil.addShutdownHook("services", running, http);
+
+          Logger.info("service up and running: {}", HumansUtil.humanTimeSince(startTime));
+          while (running.get()) {
+            ThreadUtil.sleep(2, TimeUnit.SECONDS);
+          }
+
+          http.waitStopSignal();
+        }
       }
     }
   }
