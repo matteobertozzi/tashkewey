@@ -17,7 +17,7 @@
 
 set -e
 
-PROJECT_IDS="."
+PROJECT_IDS="tashkewey-core tashkewey-netty tashkewey-aws-lambda"
 
 op_type="BUILD"
 mvn_cmds="clean install -DskipTests"
