@@ -34,7 +34,7 @@ import io.github.matteobertozzi.rednaco.threading.ShutdownUtil;
 import io.github.matteobertozzi.rednaco.time.TimeUtil;
 import io.github.matteobertozzi.tashkewey.eloop.ServiceEventLoop;
 import io.netty.bootstrap.ServerBootstrap;
-import io.netty.buffer.PooledByteBufAllocator;
+import io.netty.buffer.AdaptiveByteBufAllocator;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInitializer;
@@ -94,7 +94,7 @@ public abstract class AbstractService implements ShutdownUtil.StopSignal {
 
   protected static ServerBootstrap newTcpServerBootstrap(final ServiceEventLoop eventLoop, final EventLoopGroup workerGroup) {
     return new ServerBootstrap()
-      .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
+      .option(ChannelOption.ALLOCATOR, new AdaptiveByteBufAllocator())
       .option(ChannelOption.SO_BACKLOG, 1024)
       .option(ChannelOption.SO_REUSEADDR, true)
       .childOption(ChannelOption.TCP_NODELAY, true)
@@ -104,7 +104,7 @@ public abstract class AbstractService implements ShutdownUtil.StopSignal {
 
   protected static ServerBootstrap newUnixServerBootstrap(final ServiceEventLoop eventLoop, final EventLoopGroup workerGroup) {
     return new ServerBootstrap()
-      .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
+      .option(ChannelOption.ALLOCATOR, new AdaptiveByteBufAllocator())
       .option(ChannelOption.SO_BACKLOG, 1024)
       .option(ChannelOption.SO_REUSEADDR, true)
       .group(eventLoop.getBossGroup(), workerGroup)

@@ -454,20 +454,19 @@ public class HttpService extends AbstractService {
   private static void newRawResonse(final HttpDispatcherContext ctx, final RawMessage rawResult) {
     final int statusCode = rawResult.metadata().getInt(MessageUtil.METADATA_FOR_HTTP_STATUS, 200);
     final ByteBuf content = rawResult.hasContent() ? Unpooled.wrappedBuffer(rawResult.content()) : Unpooled.EMPTY_BUFFER;
-    final HttpResponse response = newHttpResponse(HttpResponseStatus.valueOf(statusCode), rawResult.metadata(), content, ctx.keepAlive());
+    final HttpResponse response = newHttpResponse(HttpResponseStatus.valueOf(statusCode), rawResult.metadata(), null, content, ctx.keepAlive());
     ctx.writeLastPacket(response);
   }
 
   private static void newTypedResponse(final HttpDispatcherContext ctx, final DataFormat format, final TypedMessage<?> message) {
     final int statusCode = message.metadata().getInt(MessageUtil.METADATA_FOR_HTTP_STATUS, 200);
     final ByteBuf content = ByteBufDataFormatUtil.asBytes(format, message.content());
-    final FullHttpResponse response = newHttpResponse(HttpResponseStatus.valueOf(statusCode), message.metadata(), content, ctx.keepAlive());
-    response.headers().set(HttpHeaderNames.CONTENT_TYPE, format.contentType());
+    final FullHttpResponse response = newHttpResponse(HttpResponseStatus.valueOf(statusCode), message.metadata(), format, content, ctx.keepAlive());
     ctx.writeLastPacket(response);
   }
 
   private static void newEmptyResponse(final HttpDispatcherContext ctx, final MessageMetadata metadata) {
-    final FullHttpResponse response = newHttpResponse(HttpResponseStatus.NO_CONTENT, metadata, Unpooled.EMPTY_BUFFER, ctx.keepAlive());
+    final FullHttpResponse response = newHttpResponse(HttpResponseStatus.NO_CONTENT, metadata, null, Unpooled.EMPTY_BUFFER, ctx.keepAlive());
     ctx.writeLastPacket(response);
   }
 
@@ -478,7 +477,7 @@ public class HttpService extends AbstractService {
   private static void newErrorMessage(final HttpDispatcherContext ctx, final DataFormat format, final MessageMetadata metadata, final MessageError error) {
     final int statusCode = metadata.getInt(MessageUtil.METADATA_FOR_HTTP_STATUS, error.statusCode());
     final ByteBuf content = ByteBufDataFormatUtil.asBytes(format, error);
-    final FullHttpResponse response = newHttpResponse(HttpResponseStatus.valueOf(statusCode), metadata, content, ctx.keepAlive());
+    final FullHttpResponse response = newHttpResponse(HttpResponseStatus.valueOf(statusCode), metadata, format, content, ctx.keepAlive());
     ctx.writeLastPacket(response);
   }
 
@@ -514,9 +513,13 @@ public class HttpService extends AbstractService {
     ctx.writeLastPacket(LastHttpContent.EMPTY_LAST_CONTENT);
   }
 
-  private static FullHttpResponse newHttpResponse(final HttpResponseStatus status, final MessageMetadata metadata, final ByteBuf content, final boolean keepAlive) {
+  private static FullHttpResponse newHttpResponse(final HttpResponseStatus status, final MessageMetadata metadata,
+      final DataFormat format, final ByteBuf content, final boolean keepAlive) {
     final FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, status, content);
     response.headers().setInt(HttpHeaderNames.CONTENT_LENGTH, content.readableBytes());
+    if (format != null) {
+      response.headers().set(HttpHeaderNames.CONTENT_TYPE, format.contentType());
+    }
     addHttpHeaders(response.headers(), metadata, keepAlive);
     return response;
   }

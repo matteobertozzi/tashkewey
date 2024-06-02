@@ -35,6 +35,8 @@ import io.github.matteobertozzi.easerinsights.tracing.providers.Base58RandSpanId
 import io.github.matteobertozzi.easerinsights.tracing.providers.Hex128RandTraceId;
 import io.github.matteobertozzi.easerinsights.tracing.providers.basic.BasicTracer;
 import io.github.matteobertozzi.rednaco.data.JsonFormat;
+import io.github.matteobertozzi.rednaco.data.json.JsonArray;
+import io.github.matteobertozzi.rednaco.data.json.JsonObject;
 import io.github.matteobertozzi.rednaco.dispatcher.MessageDispatcher;
 import io.github.matteobertozzi.rednaco.strings.HumansUtil;
 import io.github.matteobertozzi.rednaco.strings.StringUtil;
@@ -101,7 +103,7 @@ public final class Main {
         }
       }
 
-      final BuildInfo buildInfo = BuildInfo.fromManifest("tashkewey");
+      final BuildInfo buildInfo = BuildInfo.fromManifest("tashkewey-netty");
       JvmMetrics.INSTANCE.setBuildInfo(buildInfo);
       Logger.debug("starting {}", buildInfo);
 
@@ -124,7 +126,7 @@ public final class Main {
           ServicesPluginLoader.loadServices(dispatcher, Config.INSTANCE.modules());
 
           final HttpService http = new HttpService(dispatcher, true);
-          http.bindTcpService(eloop, 57025);
+          http.bindTcpService(eloop, Config.INSTANCE.bindAddress().inetSocketAddress());
           ShutdownUtil.addShutdownHook("services", running, http);
 
           Logger.info("service up and running: {}", HumansUtil.humanTimeSince(startTime));

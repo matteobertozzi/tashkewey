@@ -23,5 +23,5 @@ import io.github.matteobertozzi.rednaco.dispatcher.session.AuthSession;
 import io.github.matteobertozzi.rednaco.dispatcher.session.AuthSessionFactory;
 
 public interface AuthParser {
-  AuthSession getSessionObject(Message message, AuthSessionFactory sessionFactory, String authType, String authData) throws MessageException;
+  AuthSession getSessionObject(Message message, AuthSessionFactory sessionFactory, Class<?> sessionClassType, String authType, String authData) throws MessageException;
 }

@@ -20,6 +20,7 @@ package io.github.matteobertozzi.tashkewey.network.http;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -162,6 +163,19 @@ public record HttpMessageRequest(FullHttpRequest request, UriMethod method, Stri
             action.accept(entry.getKey(), value);
           }
         }
+      }
+
+      @Override
+      public List<Map.Entry<String, String>> entries() {
+        if (isEmpty()) return List.of();
+
+        final ArrayList<Map.Entry<String, String>> entries = new ArrayList<>(queryParams.size());
+        for (final Entry<String, List<String>> entry : queryParams.entrySet()) {
+          for (final String value : entry.getValue()) {
+            entries.add(Map.entry(entry.getKey(), value));
+          }
+        }
+        return entries;
       }
     }
 }

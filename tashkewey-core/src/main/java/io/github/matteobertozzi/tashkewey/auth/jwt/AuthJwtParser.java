@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package io.github.matteobertozzi.tashkewey.auth;
+package io.github.matteobertozzi.tashkewey.auth.jwt;
 
 import java.net.MalformedURLException;
 import java.net.URI;
@@ -23,6 +23,8 @@ import java.net.URISyntaxException;
 import java.security.interfaces.ECPublicKey;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -53,14 +55,17 @@ import io.github.matteobertozzi.rednaco.dispatcher.message.MessageException;
 import io.github.matteobertozzi.rednaco.dispatcher.session.AuthSession;
 import io.github.matteobertozzi.rednaco.dispatcher.session.AuthSessionFactory;
 import io.github.matteobertozzi.rednaco.localization.LocalizedResource;
+import io.github.matteobertozzi.rednaco.strings.StringUtil;
 import io.github.matteobertozzi.tashkewey.Config;
 import io.github.matteobertozzi.tashkewey.Config.AuthJwk;
+import io.github.matteobertozzi.tashkewey.auth.AuthParser;
+import io.github.matteobertozzi.tashkewey.auth.AuthProviderRegistration;
 
-public class AuthJwtParser implements AuthParser {
+public class AuthJwtParser implements AuthParser, AuthProviderRegistration {
   private static final LocalizedResource LOCALIZED_JWK_INVALID = new LocalizedResource("tashkewey.auth.jwt.invalid", "invalid jwt");
   private static final LocalizedResource LOCALIZED_JWK_INVALID_ALGO = new LocalizedResource("tashkewey.auth.jwt.invalid.algo", "invalid jwk/key {0:algo} algorithm");
-  private static final LocalizedResource LOCALIZED_JWT_NOT_YET_USABLE = new LocalizedResource("tashkewey.auth.jwt.not.yet.usable", "invalid jwk, not yet usable");
-  private static final LocalizedResource LOCALIZED_JWT_EXPIRED = new LocalizedResource("tashkewey.auth.jwt.expired", "invalid jwk, expired");
+  private static final LocalizedResource LOCALIZED_JWT_NOT_YET_USABLE = new LocalizedResource("tashkewey.auth.jwt.not.yet.usable", "invalid jwt, not yet usable");
+  private static final LocalizedResource LOCALIZED_JWT_EXPIRED = new LocalizedResource("tashkewey.auth.jwt.expired", "invalid jwt, expired");
   private static final LocalizedResource LOCALIZED_JWT_INVALID_PUBLIC_KEY = new LocalizedResource("tashkewey.auth.jwt.invalid.pub.key", "invalid jwt/jwk public key {0:issuer} {1:key}");
   private static final LocalizedResource LOCALIZED_JWT_MISSING_CONF = new LocalizedResource("tashkewey.auth.jwt.missing.config", "missing jwk configuration for issuer {0:issuer}");
   private static final LocalizedResource LOCALIZED_JWT_INVALID_CONF = new LocalizedResource("tashkewey.auth.jwt.invalid.config", "invalid jwk configuration for issuer {0:issuer}");
@@ -97,22 +102,29 @@ public class AuthJwtParser implements AuthParser {
     .label("HTTP Auth JWT Session Creation Time")
     .register(Heatmap.newMultiThreaded(12, 1, TimeUnit.HOURS, Histogram.DEFAULT_DURATION_BOUNDS_NS));
 
+  private record SessionKey(Class<?> sessionFactory, String token) {}
   private record CachedSession(AuthSession session, long expireAt) {
     private static final CachedSession INVALID = new CachedSession(null, 0);
-    public boolean isBadToken() { return session == null; }
+    private static final CachedSession EXPIRED = new CachedSession(null, 0);
+    public boolean isExpired() { return this == EXPIRED || System.currentTimeMillis() >= expireAt(); }
+    public boolean isBadToken() { return this == INVALID || session == null; }
   }
-  private final Cache<String, CachedSession> tokenCache = Caffeine.newBuilder()
+  private final Cache<SessionKey, CachedSession> tokenCache = Caffeine.newBuilder()
     .maximumWeight(1L << 20)
     .expireAfterAccess(5, TimeUnit.MINUTES)
-    .weigher((final String token, final CachedSession session) -> token.length())
+    .weigher((final SessionKey key, final CachedSession session) -> key.token().length())
     .build();
 
   @Override
-  public AuthSession getSessionObject(final Message message, final AuthSessionFactory sessionFactory, final String authType, final String authData) throws MessageException {
-    final CachedSession cached = tokenCache.getIfPresent(authData);
-    if (cached != null) {
-      jwtSessionFromCache.inc();
-      return sessionFromCache(cached);
+  public AuthSession getSessionObject(final Message message, final AuthSessionFactory sessionFactory, final Class<?> sessionClassType, final String authType, final String authData) throws MessageException {
+    final SessionKey sessionKey = new SessionKey(sessionFactory != null ? sessionFactory.sessionClass() : sessionClassType, authData); // TODO: avoid multiple copies?
+    final String cacheControl = message.metadata().get("Cache-Control");
+    if (StringUtil.isEmpty(cacheControl) || !(cacheControl.equals("no-cache") || cacheControl.contains("must-revalidate"))) {
+      final CachedSession cached = tokenCache.getIfPresent(sessionKey);
+      if (cached != null) {
+        jwtSessionFromCache.inc();
+        return sessionFromCache(cached);
+      }
     }
 
     jwtSessionNotFromCache.inc();
@@ -125,30 +137,44 @@ public class AuthJwtParser implements AuthParser {
       jwtValidationTime.sample(span.elapsedNanos());
 
       final long startTime = System.nanoTime();
-      final AuthSession session = sessionFactory.createSession(message, jwt);
-      tokenCache.put(authData, new CachedSession(session, jwt.getExpiresAtAsInstant().toEpochMilli()));
+      final AuthSession session = createJwtSession(sessionFactory, message, jwt);
+      tokenCache.put(sessionKey, new CachedSession(session, jwt.getExpiresAtAsInstant().toEpochMilli()));
       jwtSessionCreationTime.sample(System.nanoTime() - startTime);
       return session;
     } catch (final MessageException e) {
       if (e.getMessageError().statusCode() == 401) {
-        tokenCache.put(authData, CachedSession.INVALID);
+        if (ErrorStatus.SESSION_EXPIRED.name().equals(e.getMessageError().status())) {
+          tokenCache.put(sessionKey, CachedSession.EXPIRED);
+        } else {
+          tokenCache.put(sessionKey, CachedSession.INVALID);
+        }
       }
       throw e;
     }
+  }
+
+  @Override
+  public Collection<AuthSessionFactory> authSessionFactories() {
+    //  Jwt "provided" sessions
+    return List.of(JwtSubSession.FACTORY, JwtMailSession.FACTORY);
+  }
+
+  private static AuthSession createJwtSession(final AuthSessionFactory sessionFactory, final Message message, final DecodedJWT jwt) throws MessageException {
+    if (sessionFactory != null) {
+      return sessionFactory.createSession(message, jwt);
+    }
+    return JwtSubSession.FACTORY.createSession(message, jwt);
   }
 
   // ==========================================================================================
   //  Cache Related
   // ==========================================================================================
   private AuthSession sessionFromCache(final CachedSession cached) throws MessageException {
-    if (cached.isBadToken()) {
+    if (cached.isExpired()) {
+      throw new MessageException(MessageError.newUnauthorized(ErrorStatus.SESSION_EXPIRED, LOCALIZED_JWT_EXPIRED));
+    } else if (cached.isBadToken()) {
       throw new MessageException(MessageError.newUnauthorized(LOCALIZED_JWK_INVALID));
     }
-
-    if (System.currentTimeMillis() >= cached.expireAt()) {
-      throw new MessageException(MessageError.newUnauthorized(ErrorStatus.SESSION_EXPIRED, LOCALIZED_JWT_EXPIRED));
-    }
-
     return cached.session();
   }
 

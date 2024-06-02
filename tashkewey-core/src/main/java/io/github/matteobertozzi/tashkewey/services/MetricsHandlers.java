@@ -16,12 +16,15 @@
  */
 package io.github.matteobertozzi.tashkewey.services;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,8 +36,11 @@ import io.github.matteobertozzi.easerinsights.metrics.MetricsRegistry;
 import io.github.matteobertozzi.easerinsights.tracing.TaskMonitor;
 import io.github.matteobertozzi.easerinsights.tracing.TraceRecorder;
 import io.github.matteobertozzi.easerinsights.tracing.TraceRecorder.Traces;
+import io.github.matteobertozzi.rednaco.bytes.BytesUtil;
+import io.github.matteobertozzi.rednaco.bytes.PagedByteArray;
 import io.github.matteobertozzi.rednaco.dispatcher.annotations.execution.InlineFast;
 import io.github.matteobertozzi.rednaco.dispatcher.annotations.session.AllowPublicAccess;
+import io.github.matteobertozzi.rednaco.dispatcher.annotations.session.RequirePermission;
 import io.github.matteobertozzi.rednaco.dispatcher.annotations.uri.UriMapping;
 import io.github.matteobertozzi.rednaco.dispatcher.annotations.uri.UriPrefix;
 import io.github.matteobertozzi.rednaco.dispatcher.message.Message;
@@ -48,8 +54,8 @@ import io.github.matteobertozzi.rednaco.util.BuildInfo;
 @UriPrefix("/runtime")
 public class MetricsHandlers {
   @InlineFast
-  @AllowPublicAccess
   @UriMapping(uri = "/modules")
+  @RequirePermission(module = "runtime", oneOf = "MODULE_LIST")
   public List<BuildInfo> modules() {
     final Collection<ServicePlugin> plugins = ServicePluginRegistry.INSTANCE.getPlugins();
     final ArrayList<BuildInfo> buildInfo = new ArrayList<>(plugins.size());
@@ -59,27 +65,49 @@ public class MetricsHandlers {
     return buildInfo;
   }
 
-  @InlineFast
   @AllowPublicAccess
+  @UriMapping(uri = "/endpoints")
+  public Message endpoints() throws IOException {
+    final PagedByteArray builder = new PagedByteArray(4096);
+    final Enumeration<URL> resources = Thread.currentThread().getContextClassLoader().getResources("docs/endpoints.yaml");
+    while (resources.hasMoreElements()) {
+      final URL url = resources.nextElement();
+      try (InputStream stream = (InputStream) url.getContent()) {
+        final byte[] yaml = stream.readAllBytes();
+        builder.add(yaml);
+        builder.add(BytesUtil.NEW_LINE);
+      }
+    }
+    return MessageUtil.newRawMessage(Map.of(
+      MessageUtil.METADATA_FOR_HTTP_STATUS, "200",
+      MessageUtil.METADATA_CONTENT_TYPE, MessageUtil.CONTENT_TYPE_TEXT_PLAIN
+    ), builder.toByteArray());
+  }
+
+  @InlineFast
   @UriMapping(uri = "/metrics")
+  @RequirePermission(module = "runtime", oneOf = "METRICS")
   public Message metrics() {
     final long startTime = System.nanoTime();
     final String report = MetricsRegistry.INSTANCE.humanReport();
     final long elapsed = System.nanoTime() - startTime;
     final String text = "Report generated in " + HumansUtil.humanTimeNanos(elapsed) + "\n" + report;
-    return MessageUtil.newRawMessage(Map.of(MessageUtil.METADATA_FOR_HTTP_STATUS, "200"), text);
+    return MessageUtil.newRawMessage(Map.of(
+      MessageUtil.METADATA_FOR_HTTP_STATUS, "200",
+      MessageUtil.METADATA_CONTENT_TYPE, MessageUtil.CONTENT_TYPE_TEXT_PLAIN
+    ), text);
   }
 
   @InlineFast
-  @AllowPublicAccess
   @UriMapping(uri = "/metrics/data")
+  @RequirePermission(module = "runtime", oneOf = "METRICS")
   public List<MetricSnapshot> jsonMetrics() {
     return MetricsRegistry.INSTANCE.snapshot();
   }
 
   @InlineFast
-  @AllowPublicAccess
   @UriMapping(uri = "/metrics/dashboard")
+  @RequirePermission(module = "runtime", oneOf = "METRICS")
   public Message dashboardMetrics() throws IOException {
     final String template = loadResourceAsString("webapp/metrics-dashboard.html");
     return MessageUtil.newRawMessage(Map.of(
@@ -96,8 +124,8 @@ public class MetricsHandlers {
   }
 
   @InlineFast
-  @AllowPublicAccess
   @UriMapping(uri = "/monitor")
+  @RequirePermission(module = "runtime", oneOf = "MONITOR")
   public Message monitor() throws IOException {
     final String template = loadResourceAsString("webapp/monitor.html");
 
@@ -135,6 +163,7 @@ public class MetricsHandlers {
 
   private static String loadResourceAsString(final String path) throws IOException {
     try (InputStream stream = MetricsHandlers.class.getClassLoader().getResourceAsStream(path)) {
+      if (stream == null) throw new FileNotFoundException(path);
       return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
     }
   }

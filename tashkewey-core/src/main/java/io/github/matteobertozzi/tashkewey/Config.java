@@ -18,8 +18,10 @@
 package io.github.matteobertozzi.tashkewey;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,8 +33,10 @@ import io.github.matteobertozzi.rednaco.data.json.JsonArray;
 import io.github.matteobertozzi.rednaco.data.json.JsonElement;
 import io.github.matteobertozzi.rednaco.data.json.JsonObject;
 import io.github.matteobertozzi.rednaco.data.json.JsonUtil;
+import io.github.matteobertozzi.rednaco.dispatcher.session.AuthSessionPermissions;
 import io.github.matteobertozzi.rednaco.strings.StringUtil;
 import io.github.matteobertozzi.rednaco.strings.TemplateUtil;
+import io.github.matteobertozzi.tashkewey.auth.basic.BasicSession;
 
 public class Config {
   public static final Config INSTANCE = new Config();
@@ -42,10 +46,32 @@ public class Config {
   }
 
   public void load(final Path path) throws IOException {
-    final JsonObject conf = JsonUtil.fromJson(path.toFile(), JsonObject.class);
+    load(JsonUtil.fromJson(path.toFile(), JsonObject.class));
+  }
+
+  public void load(final JsonObject conf) {
+    parseBindAddress(conf.getAsJsonObject("bind"));
     parseModules(JsonUtil.fromJson(conf.get("modules"), String[].class));
     parseAuth(conf.getAsJsonObject("auth"));
     parseEaserInsightsConfig(conf.getAsJsonObject("easer.insights"));
+  }
+
+  // ===========================================================================
+  //  Bind Address
+  // ===========================================================================
+  public record BindAddress(String host, int port, String url) {
+    public InetSocketAddress inetSocketAddress() {
+      return new InetSocketAddress(host, port);
+    }
+  }
+
+  private BindAddress bindAddress;
+  private void parseBindAddress(final JsonObject confBind) {
+    this.bindAddress = JsonUtil.fromJson(confBind, BindAddress.class);
+  }
+
+  public BindAddress bindAddress() {
+    return bindAddress;
   }
 
   // ===========================================================================
@@ -74,6 +100,12 @@ public class Config {
     return issJwkMap.get(iss);
   }
 
+  public record AuthBasic(String token, Map<String, Set<String>> roles) {}
+  private Map<String, BasicSession> basicAuthTokens = Map.of();
+  public BasicSession authBasic(final String token) {
+    return basicAuthTokens.get(token);
+  }
+
   private void parseAuth(final JsonObject conf) {
     if (conf == null || conf.isEmpty()) return;
 
@@ -84,7 +116,21 @@ public class Config {
         issJwkMap.put(jwks[i].iss(), jwks[i]);
       }
     }
+
+    final AuthBasic[] basicAuths = JsonUtil.fromJson(conf.get("basic"), AuthBasic[].class);
+    if (ArrayUtil.isNotEmpty(basicAuths)) {
+      this.basicAuthTokens = HashMap.newHashMap(basicAuths.length);
+      for (final AuthBasic auth: basicAuths) {
+        final String token = new String(Base64.getDecoder().decode(auth.token));
+        final int userEof = token.indexOf(':');
+        final String username = token.substring(0, userEof);
+        final String password = token.substring(userEof + 1);
+        final AuthSessionPermissions roles = AuthSessionPermissions.fromMap(auth.roles());
+        this.basicAuthTokens.put(auth.token, new BasicSession(auth.token, username, password, roles));
+      }
+    }
   }
+
 
   // ===========================================================================
   //  Easer Insights
@@ -98,7 +144,11 @@ public class Config {
   }
 
   private void parseEaserInsightsConfig(final JsonObject conf) {
+    if (conf == null) return;
+
     final JsonArray exporters = conf.getAsJsonArray("exporters");
+    if (exporters == null) return;
+
     for (int i = 0, n = exporters.size(); i < n; ++i) {
       final JsonObject exporter = exporters.get(i).getAsJsonObject();
       switch (exporter.get("type").getAsString()) {

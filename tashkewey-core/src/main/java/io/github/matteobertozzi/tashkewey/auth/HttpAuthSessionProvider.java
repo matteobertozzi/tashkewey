@@ -33,6 +33,8 @@ import io.github.matteobertozzi.rednaco.dispatcher.session.AuthSessionFactory;
 import io.github.matteobertozzi.rednaco.dispatcher.session.AuthSessionProvider;
 import io.github.matteobertozzi.rednaco.localization.LocalizedResource;
 import io.github.matteobertozzi.rednaco.strings.StringUtil;
+import io.github.matteobertozzi.tashkewey.auth.basic.AuthBasicParser;
+import io.github.matteobertozzi.tashkewey.auth.jwt.AuthJwtParser;
 
 public class HttpAuthSessionProvider implements AuthSessionProvider {
   private static final Heatmap authTime = Metrics.newCollector()
@@ -46,12 +48,23 @@ public class HttpAuthSessionProvider implements AuthSessionProvider {
   private final AuthParser defaultParser = null;
 
   public HttpAuthSessionProvider() {
-    parsers.put("bearer", new AuthJwtParser());
-    //parsers.put("basic", new AuthBasicParser());
+    registerAuthParser("bearer", new AuthJwtParser());
+    registerAuthParser("basic", new AuthBasicParser());
+  }
+
+  private void registerAuthParser(final String authPrefix, final AuthParser authParser) {
+    parsers.put(authPrefix, authParser);
+
+    if (authParser instanceof final AuthProviderRegistration registration) {
+      for (final AuthSessionFactory authFactory: registration.authSessionFactories()) {
+        registerSessionFactory(authFactory);
+      }
+    }
   }
 
   @Override
   public void registerSessionFactory(final AuthSessionFactory factory) {
+    Logger.debug("REGISTER SESSION FACTORY: {} {}", factory.sessionClass(), factory);
     sessionFactoryMap.put(factory.sessionClass(), factory);
   }
 
@@ -65,6 +78,11 @@ public class HttpAuthSessionProvider implements AuthSessionProvider {
 
     // Authorization <type> <data>
     final int typeEof = authHeader.indexOf(' ');
+    if (typeEof < 0) {
+      Logger.debug("no auth type for {}", authHeader);
+      throw newAuthUnsupported(authHeader);
+    }
+
     final String authType = authHeader.substring(0, typeEof).toLowerCase();
     final AuthParser authParser = parsers.getOrDefault(authType, defaultParser);
     if (authParser == null) {
@@ -72,16 +90,11 @@ public class HttpAuthSessionProvider implements AuthSessionProvider {
       throw newAuthUnsupported(authType);
     }
 
-    final AuthSessionFactory sessionFactory = sessionFactoryMap.get(sessionClassType);
-    if (sessionFactory == null) {
-      Logger.warn("no auth-session-factory for {}", sessionClassType);
-      throw newAuthUnsupported(authType);
-    }
-
     // Parse auth session
     try {
+      final AuthSessionFactory sessionFactory = sessionFactoryMap.get(sessionClassType);
       final String authData = StringUtil.trimToEmpty(authHeader.substring(1 + typeEof));
-      final AuthSession session = authParser.getSessionObject(message, sessionFactory, authType, authData);
+      final AuthSession session = authParser.getSessionObject(message, sessionFactory, sessionClassType, authType, authData);
       if (session == null) {
         throw newInvalidAuth();
       }
@@ -108,7 +121,7 @@ public class HttpAuthSessionProvider implements AuthSessionProvider {
   public void requireOneOfPermission(final AuthSession session, final String module, final String[] actions) throws MessageException {
     if (session.permissions().hasOneOfRoles(module, actions)) return;
 
-    Logger.warn("{session} has none of the {roles} for {module}", session, module, actions);
+    Logger.warn("{session} has none of the {roles} for {module}", session, actions, module);
     throw newMissingPermission(module, actions);
   }
 
