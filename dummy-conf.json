@@ -1,0 +1,39 @@
+{
+  "bind": {
+    "host": "0.0.0.0",
+    "port": 57025,
+    "url": "https://..."
+  },
+  "modules": ["aaa", "bbb", "ccc"],
+  "auth": {
+    "type": {
+      "bearer": [
+        { "path": "*", "type": "jwk" }
+      ],
+      "basic": []
+    },
+    "jwk": [
+      {
+        "iss": "https://...",
+        "domain": "https://..."
+      },
+      {
+        "iss": "https://...",
+        "certs": "https://.../openid-connect/certs"
+      }
+    ],
+    "basic": [
+      { "token": "dXplcjpwYXp3b3Jk", "roles": {"runtime": ["METRICS", "MONITOR"]} }
+    ]
+  },
+  "easer.insights": {
+    "exporters": [
+      {
+        "type": "influx.telegraph",
+        "url": "...",
+        "token": "...",
+        "dimensions": {}
+      }
+    ]
+  }
+}
