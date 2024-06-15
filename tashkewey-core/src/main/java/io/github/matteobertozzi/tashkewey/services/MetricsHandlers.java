@@ -39,6 +39,7 @@ import io.github.matteobertozzi.easerinsights.tracing.TraceRecorder.Traces;
 import io.github.matteobertozzi.rednaco.bytes.BytesUtil;
 import io.github.matteobertozzi.rednaco.bytes.PagedByteArray;
 import io.github.matteobertozzi.rednaco.dispatcher.annotations.execution.InlineFast;
+import io.github.matteobertozzi.rednaco.dispatcher.annotations.session.AllowBasicAuth;
 import io.github.matteobertozzi.rednaco.dispatcher.annotations.session.AllowPublicAccess;
 import io.github.matteobertozzi.rednaco.dispatcher.annotations.session.RequirePermission;
 import io.github.matteobertozzi.rednaco.dispatcher.annotations.uri.UriMapping;
@@ -54,6 +55,7 @@ import io.github.matteobertozzi.rednaco.util.BuildInfo;
 @UriPrefix("/runtime")
 public class MetricsHandlers {
   @InlineFast
+  @AllowBasicAuth
   @UriMapping(uri = "/modules")
   @RequirePermission(module = "runtime", oneOf = "MODULE_LIST")
   public List<BuildInfo> modules() {
@@ -85,6 +87,7 @@ public class MetricsHandlers {
   }
 
   @InlineFast
+  @AllowBasicAuth
   @UriMapping(uri = "/metrics")
   @RequirePermission(module = "runtime", oneOf = "METRICS")
   public Message metrics() {
@@ -99,6 +102,7 @@ public class MetricsHandlers {
   }
 
   @InlineFast
+  @AllowBasicAuth
   @UriMapping(uri = "/metrics/data")
   @RequirePermission(module = "runtime", oneOf = "METRICS")
   public List<MetricSnapshot> jsonMetrics() {
@@ -106,6 +110,7 @@ public class MetricsHandlers {
   }
 
   @InlineFast
+  @AllowBasicAuth
   @UriMapping(uri = "/metrics/dashboard")
   @RequirePermission(module = "runtime", oneOf = "METRICS")
   public Message dashboardMetrics() throws IOException {
@@ -117,6 +122,7 @@ public class MetricsHandlers {
   }
 
   @InlineFast
+  @AllowBasicAuth
   @AllowPublicAccess
   @UriMapping(uri = "/traces/data")
   public Traces[] traces() {
@@ -124,6 +130,7 @@ public class MetricsHandlers {
   }
 
   @InlineFast
+  @AllowBasicAuth
   @UriMapping(uri = "/monitor")
   @RequirePermission(module = "runtime", oneOf = "MONITOR")
   public Message monitor() throws IOException {

@@ -466,7 +466,8 @@ public class HttpService extends AbstractService {
   }
 
   private static void newEmptyResponse(final HttpDispatcherContext ctx, final MessageMetadata metadata) {
-    final FullHttpResponse response = newHttpResponse(HttpResponseStatus.NO_CONTENT, metadata, null, Unpooled.EMPTY_BUFFER, ctx.keepAlive());
+    final int statusCode = metadata.getInt(MessageUtil.METADATA_FOR_HTTP_STATUS, 204);
+    final FullHttpResponse response = newHttpResponse(HttpResponseStatus.valueOf(statusCode), metadata, null, Unpooled.EMPTY_BUFFER, ctx.keepAlive());
     ctx.writeLastPacket(response);
   }
 

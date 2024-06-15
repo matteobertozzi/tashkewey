@@ -17,7 +17,8 @@
 package io.github.matteobertozzi.tashkewey.services;
 
 import io.github.matteobertozzi.easerinsights.profiler.ProfilerService;
-import io.github.matteobertozzi.rednaco.dispatcher.annotations.session.AllowPublicAccess;
+import io.github.matteobertozzi.rednaco.dispatcher.annotations.session.AllowBasicAuth;
+import io.github.matteobertozzi.rednaco.dispatcher.annotations.session.RequirePermission;
 import io.github.matteobertozzi.rednaco.dispatcher.annotations.uri.UriMapping;
 import io.github.matteobertozzi.rednaco.dispatcher.annotations.uri.UriPrefix;
 import io.github.matteobertozzi.rednaco.dispatcher.message.Message;
@@ -26,62 +27,72 @@ import io.github.matteobertozzi.rednaco.dispatcher.routing.UriMethod;
 
 @UriPrefix("/runtime")
 public class ProfilerHandlers {
-  @AllowPublicAccess
+  @AllowBasicAuth
   @UriMapping(uri = "/profiler/start/cpu")
+  @RequirePermission(module = "runtime", oneOf = "PROFILER")
   public void profilerStartCpu() {
     ProfilerService.INSTANCE.startCpuRecording();
   }
 
-  @AllowPublicAccess
+  @AllowBasicAuth
   @UriMapping(uri = "/profiler/start/alloc")
+  @RequirePermission(module = "runtime", oneOf = "PROFILER")
   public void profilerStartAlloc() {
     ProfilerService.INSTANCE.startAllocRecording();
   }
 
-  @AllowPublicAccess
+  @AllowBasicAuth
   @UriMapping(uri = "/profiler/start/wall")
+  @RequirePermission(module = "runtime", oneOf = "PROFILER")
   public void profilerStartWall() {
     ProfilerService.INSTANCE.startWallRecording();
   }
 
-  @AllowPublicAccess
+  @AllowBasicAuth
   @UriMapping(uri = "/profiler/start/lock")
+  @RequirePermission(module = "runtime", oneOf = "PROFILER")
   public void profilerStartLock() {
     ProfilerService.INSTANCE.startLockRecording();
   }
 
-  @AllowPublicAccess
+  @AllowBasicAuth
   @UriMapping(uri = "/profiler/stop", method = { UriMethod.GET, UriMethod.POST })
+  @RequirePermission(module = "runtime", oneOf = "PROFILER")
   public void profilerStop() {
     ProfilerService.INSTANCE.stopRecording();
   }
 
-  @AllowPublicAccess
+  @AllowBasicAuth
   @UriMapping(uri = "/profiler/flamegraph", method = UriMethod.GET)
+  @RequirePermission(module = "runtime", oneOf = "PROFILER")
   public Message profileFlamegraph() throws IllegalArgumentException, IllegalStateException {
     return MessageUtil.newHtmlMessage(ProfilerService.INSTANCE.flamegraphHtml());
   }
 
-  @AllowPublicAccess
+  @AllowBasicAuth
   @UriMapping(uri = "/profiler/tree", method = UriMethod.GET)
+  @RequirePermission(module = "runtime", oneOf = "PROFILER")
   public Message profileTree() throws IllegalArgumentException, IllegalStateException {
     return MessageUtil.newHtmlMessage(ProfilerService.INSTANCE.treeHtml());
   }
 
-  @AllowPublicAccess
+  @AllowBasicAuth
   @UriMapping(uri = "/profiler/flat", method = UriMethod.GET)
+  @RequirePermission(module = "runtime", oneOf = "PROFILER")
   public Message profilerShowFlat() throws IllegalArgumentException, IllegalStateException {
     return MessageUtil.newTextMessage(ProfilerService.INSTANCE.hotMethodsTextData(200));
   }
 
-  @AllowPublicAccess
+  @AllowBasicAuth
   @UriMapping(uri = "/profiler/traces", method = UriMethod.GET)
+  @RequirePermission(module = "runtime", oneOf = "PROFILER")
   public Message profilerShowTraces() throws IllegalArgumentException, IllegalStateException {
     return MessageUtil.newTextMessage(ProfilerService.INSTANCE.callTracesTextData(200));
   }
 
-  @AllowPublicAccess
+  @AllowBasicAuth
   @UriMapping(uri = "/profiler/samples", method = UriMethod.GET)
+  @RequirePermission(module = "runtime", oneOf = "PROFILER")
   public Message profilerShowSamples() throws IllegalArgumentException, IllegalStateException {
     return MessageUtil.newTextMessage(ProfilerService.INSTANCE.flamegraphTextData());
   }
