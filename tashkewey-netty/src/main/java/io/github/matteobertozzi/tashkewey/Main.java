@@ -35,8 +35,6 @@ import io.github.matteobertozzi.easerinsights.tracing.providers.Base58RandSpanId
 import io.github.matteobertozzi.easerinsights.tracing.providers.Hex128RandTraceId;
 import io.github.matteobertozzi.easerinsights.tracing.providers.basic.BasicTracer;
 import io.github.matteobertozzi.rednaco.data.JsonFormat;
-import io.github.matteobertozzi.rednaco.data.json.JsonArray;
-import io.github.matteobertozzi.rednaco.data.json.JsonObject;
 import io.github.matteobertozzi.rednaco.dispatcher.MessageDispatcher;
 import io.github.matteobertozzi.rednaco.strings.HumansUtil;
 import io.github.matteobertozzi.rednaco.strings.StringUtil;
@@ -86,8 +84,8 @@ public final class Main {
       if (IS_AWS_SYS) {
         Logger.setLogProvider(new JsonLogProvider(v -> Main.printJsonLine(asyncLogWriter, v)));
       } else {
-        Logger.setLogProvider(TextLogProvider.newAsyncProvider(asyncLogWriter));
-        //Logger.setLogProvider(TextLogProvider.newStreamProvider(System.out));
+        //Logger.setLogProvider(TextLogProvider.newAsyncProvider(asyncLogWriter));
+        Logger.setLogProvider(TextLogProvider.newStreamProvider(System.out));
       }
       Tracer.setIdProviders(Hex128RandTraceId.PROVIDER, Base58RandSpanId.PROVIDER);
       Tracer.setTraceProvider(BasicTracer.INSTANCE);

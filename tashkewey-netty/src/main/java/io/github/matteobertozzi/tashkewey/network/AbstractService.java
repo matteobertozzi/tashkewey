@@ -95,9 +95,11 @@ public abstract class AbstractService implements ShutdownUtil.StopSignal {
   protected static ServerBootstrap newTcpServerBootstrap(final ServiceEventLoop eventLoop, final EventLoopGroup workerGroup) {
     return new ServerBootstrap()
       .option(ChannelOption.ALLOCATOR, new AdaptiveByteBufAllocator())
-      .option(ChannelOption.SO_BACKLOG, 1024)
+      .option(ChannelOption.SO_BACKLOG, 8192)
       .option(ChannelOption.SO_REUSEADDR, true)
       .childOption(ChannelOption.TCP_NODELAY, true)
+      .childOption(ChannelOption.SO_KEEPALIVE, true)
+      .childOption(ChannelOption.SO_REUSEADDR, true)
       .group(eventLoop.getBossGroup(), workerGroup)
       .channel(eventLoop.getServerChannelClass());
   }
@@ -105,7 +107,7 @@ public abstract class AbstractService implements ShutdownUtil.StopSignal {
   protected static ServerBootstrap newUnixServerBootstrap(final ServiceEventLoop eventLoop, final EventLoopGroup workerGroup) {
     return new ServerBootstrap()
       .option(ChannelOption.ALLOCATOR, new AdaptiveByteBufAllocator())
-      .option(ChannelOption.SO_BACKLOG, 1024)
+      .option(ChannelOption.SO_BACKLOG, 8192)
       .option(ChannelOption.SO_REUSEADDR, true)
       .group(eventLoop.getBossGroup(), workerGroup)
       .channel(eventLoop.getServerUnixChannelClass());

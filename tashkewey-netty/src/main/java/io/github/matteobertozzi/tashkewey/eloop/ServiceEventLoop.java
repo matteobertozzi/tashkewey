@@ -143,6 +143,14 @@ public class ServiceEventLoop implements AutoCloseable {
   }
 
   private static EventLoopGroup newEventLoop(final EventLoopType type, final String name, final int nThreads) {
+    /* Netty 4.2
+    final IoHandlerFactory ioFactory = switch (type) {
+      case EPOLL -> EpollIoHandler.newFactory();
+      case KQUEUE -> KQueueIoHandler.newFactory();
+      case NIO -> NioIoHandler.newFactory();
+    };
+    return new MultiThreadIoEventLoopGroup(nThreads, new DefaultThreadFactory(type.name().toLowerCase() + "-" + name), ioFactory);
+    */
     return switch (type) {
       case EPOLL -> new EpollEventLoopGroup(nThreads, new DefaultThreadFactory("xepoll-" + name));
       case KQUEUE -> new KQueueEventLoopGroup(nThreads, new DefaultThreadFactory("xkqueue-" + name));
