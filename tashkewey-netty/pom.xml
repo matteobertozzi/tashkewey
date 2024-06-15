@@ -54,7 +54,7 @@
     <rednaco.version>3.0.0-SNAPSHOT</rednaco.version>
     <easer.insights.version>0.1.6-SNAPSHOT</easer.insights.version>
 
-    <netty.version>4.1.110.Final</netty.version>
+    <netty.version>4.1.111.Final</netty.version>
     <swagger.version>2.1.21</swagger.version>
     <jctools.version>4.0.2</jctools.version>
     <tika.version>2.9.1</tika.version>
@@ -66,9 +66,9 @@
     <maven.compiler.version>3.13.0</maven.compiler.version>
     <maven.source.version>3.3.1</maven.source.version>
     <maven.javadoc.version>3.7.0</maven.javadoc.version>
-    <maven.surefire.version>3.2.5</maven.surefire.version>
-    <maven.failsafe.version>3.2.5</maven.failsafe.version>
-    <maven.dependency.version>3.6.1</maven.dependency.version>
+    <maven.surefire.version>3.3.0</maven.surefire.version>
+    <maven.failsafe.version>3.3.0</maven.failsafe.version>
+    <maven.dependency.version>3.7.0</maven.dependency.version>
     <nexus.staging.maven.version>1.7.0</nexus.staging.maven.version>
 
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
