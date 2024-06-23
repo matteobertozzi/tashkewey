@@ -4,7 +4,7 @@
     "port": 57025,
     "url": "https://..."
   },
-  "modules": ["aaa", "bbb", "ccc"],
+  "modules": ["demo-service"],
   "auth": {
     "type": {
       "bearer": [

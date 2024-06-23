@@ -17,6 +17,9 @@
 
 set -e
 
+VERSION="0.1.0-SNAPSHOT"
+
+export PROJECT_IDS="tashkewey-core tashkewey-netty tashkewey-aws-lambda demo-service"
 ./build.sh
 
 # Prepare dist bundle
@@ -24,7 +27,8 @@ export TASHKEWEY_SERVICE_ROOT="build-dist"
 rm -rf ${TASHKEWEY_SERVICE_ROOT}
 mkdir -p ${TASHKEWEY_SERVICE_ROOT}
 cp -r tashkewey-netty/target/lib ${TASHKEWEY_SERVICE_ROOT}
-cp tashkewey-netty/target/tashkewey-netty-0.1.0-SNAPSHOT.jar ${TASHKEWEY_SERVICE_ROOT}/lib
+cp demo-service/target/demo-service-${VERSION}.jar ${TASHKEWEY_SERVICE_ROOT}/lib
+cp tashkewey-netty/target/tashkewey-netty-${VERSION}.jar ${TASHKEWEY_SERVICE_ROOT}/lib
 cp dummy-conf.json ${TASHKEWEY_SERVICE_ROOT}/config.json
 
 ./scripts/run-service.sh

@@ -25,7 +25,6 @@ import io.github.matteobertozzi.rednaco.dispatcher.routing.RoutesRegistration;
 import io.github.matteobertozzi.rednaco.dispatcher.session.AuthSessionFactory;
 import io.github.matteobertozzi.rednaco.plugins.ServicePluginRegistry;
 import io.github.matteobertozzi.tashkewey.auth.AuthProviderRegistration;
-import io.github.matteobertozzi.tashkewey.services.autogen.DemoServiceRouteMapping;
 import io.github.matteobertozzi.tashkewey.services.autogen.HealthHandlersRouteMapping;
 import io.github.matteobertozzi.tashkewey.services.autogen.MetricsHandlersRouteMapping;
 import io.github.matteobertozzi.tashkewey.services.autogen.ProfilerHandlersRouteMapping;
@@ -60,9 +59,6 @@ public final class ServicesPluginLoader {
     routeBuilder.add(new MetricsHandlersRouteMapping(dispatcher));
     routeBuilder.add(new ProfilerHandlersRouteMapping(dispatcher));
     routeBuilder.add(new TaskHandlersRouteMapping(dispatcher));
-
-    // TODO: DEMO
-    routeBuilder.add(new DemoServiceRouteMapping(dispatcher));
 
     loadPluginServices(routeBuilder, dispatcher, modules);
 
