@@ -90,9 +90,10 @@ public class Config {
   // ===========================================================================
   //  Auth
   // ===========================================================================
-  public record AuthJwk(String iss, String domain, String certsUri) {
+  public record AuthJwk(String iss, String domain, String certsUri, String[] allowOnPrefix) {
     public boolean hasCertsUri() { return StringUtil.isNotEmpty(certsUri); }
     public boolean hasDomain() { return StringUtil.isNotEmpty(domain); }
+    public boolean isAllowedForUrl(final String url) { return Config.isAllowedForUrl(allowOnPrefix(), url); }
   }
 
   private Map<String, AuthJwk> issJwkMap = Map.of();
@@ -100,10 +101,19 @@ public class Config {
     return issJwkMap.get(iss);
   }
 
-  public record AuthBasic(String token, Map<String, Set<String>> roles) {}
+  public record AuthBasic(String token, Map<String, Set<String>> roles, String[] allowOnPrefix) {
+    public boolean isAllowedForUrl(final String url) { return Config.isAllowedForUrl(allowOnPrefix(), url); }
+  }
+
   private Map<String, BasicSession> basicAuthTokens = Map.of();
+  private Map<String, AuthBasic> basicAuthConfig = Map.of();
+
   public BasicSession authBasic(final String token) {
     return basicAuthTokens.get(token);
+  }
+
+  public AuthBasic authBasicConfig(final String token) {
+    return basicAuthConfig.get(token);
   }
 
   private void parseAuth(final JsonObject conf) {
@@ -120,6 +130,7 @@ public class Config {
     final AuthBasic[] basicAuths = JsonUtil.fromJson(conf.get("basic"), AuthBasic[].class);
     if (ArrayUtil.isNotEmpty(basicAuths)) {
       this.basicAuthTokens = HashMap.newHashMap(basicAuths.length);
+      this.basicAuthConfig = HashMap.newHashMap(basicAuths.length);
       for (final AuthBasic auth: basicAuths) {
         final String token = new String(Base64.getDecoder().decode(auth.token));
         final int userEof = token.indexOf(':');
@@ -127,10 +138,21 @@ public class Config {
         final String password = token.substring(userEof + 1);
         final AuthSessionPermissions roles = AuthSessionPermissions.fromMap(auth.roles());
         this.basicAuthTokens.put(auth.token, new BasicSession(auth.token, username, password, roles));
+        this.basicAuthConfig.put(auth.token, auth);
       }
     }
   }
 
+  private static boolean isAllowedForUrl(final String[] allowOnPrefix, final String url) {
+    if (ArrayUtil.isEmpty(allowOnPrefix)) return true;
+
+    for (final String prefix: allowOnPrefix) {
+      if (url.startsWith(prefix)) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   // ===========================================================================
   //  Easer Insights
