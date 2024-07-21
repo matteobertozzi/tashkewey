@@ -2,7 +2,7 @@
   "bind": {
     "host": "0.0.0.0",
     "port": 57025,
-    "url": "https://..."
+    "url": "https://${ENV_VAR_URL}"
   },
   "modules": ["demo-service"],
   "auth": {
@@ -19,7 +19,7 @@
       },
       {
         "iss": "https://...",
-        "certs": "https://.../openid-connect/certs"
+        "certs": "https://.../openid-connect/certs",
         "allowOnPrefix": [ "/moduleA/v1/", "/module2" ]
       }
     ],
@@ -33,6 +33,11 @@
         "type": "influx.telegraph",
         "url": "...",
         "token": "...",
+        "dimensions": {}
+      },
+      {
+        "type": "aws.cloudwatch",
+        "namespace": "...",
         "dimensions": {}
       }
     ]

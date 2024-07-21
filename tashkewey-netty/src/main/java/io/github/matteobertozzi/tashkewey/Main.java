@@ -17,12 +17,14 @@
 
 package io.github.matteobertozzi.tashkewey;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.github.matteobertozzi.easerinsights.EaserInsights;
+import io.github.matteobertozzi.easerinsights.aws.cloudwatch.AwsCloudWatchExporter;
 import io.github.matteobertozzi.easerinsights.influx.InfluxLineExporter;
 import io.github.matteobertozzi.easerinsights.jvm.JvmMetrics;
 import io.github.matteobertozzi.easerinsights.logging.Logger;
@@ -43,6 +45,7 @@ import io.github.matteobertozzi.rednaco.threading.StripedLock.Cell;
 import io.github.matteobertozzi.rednaco.threading.ThreadUtil;
 import io.github.matteobertozzi.rednaco.time.TimeUtil;
 import io.github.matteobertozzi.rednaco.util.BuildInfo;
+import io.github.matteobertozzi.tashkewey.Config.AwsCloudWatchConfig;
 import io.github.matteobertozzi.tashkewey.Config.InfluxTelegrafConfig;
 import io.github.matteobertozzi.tashkewey.auth.HttpAuthSessionProvider;
 import io.github.matteobertozzi.tashkewey.eloop.ServiceEventLoop;
@@ -64,6 +67,22 @@ public final class Main {
     }
   }
 
+  private static void setupMetricsExporter(final EaserInsights insights, final Config config) throws IOException {
+    for (final InfluxTelegrafConfig influxConfig: config.influxConfig()) {
+      insights.addExporter(
+        InfluxLineExporter.newInfluxExporter(influxConfig.url(), influxConfig.token())
+          .addDefaultDimensions(influxConfig.defaultDimensions())
+      );
+    }
+
+    for (final AwsCloudWatchConfig cloudWatchConfig: config.awsCloudWatchConfig()) {
+      insights.addExporter(AwsCloudWatchExporter.newAwsCloudWatchExporter()
+        .setNamespace(cloudWatchConfig.namespace())
+        .addDefaultDimensions(cloudWatchConfig.defaultDimensions())
+      );
+    }
+  }
+
   private static final boolean IS_AWS_SYS = StringUtil.isNotEmpty(System.getenv("ECS_CONTAINER_METADATA_URI"));
   private static void printJsonLine(final AsyncTextLogWriter asyncWriter, final Object v) {
     final Cell<AsyncTextLogBuffer> cell = asyncWriter.get();
@@ -75,6 +94,10 @@ public final class Main {
     } finally {
       cell.unlock();
     }
+  }
+
+  private static void uncaughtExceptionHandler(final Thread thread, final Throwable exception) {
+    Logger.error(exception, "Thread {} aborted", thread);
   }
 
   public static void main(final String[] args) throws Throwable {
@@ -101,18 +124,15 @@ public final class Main {
         }
       }
 
+      Thread.setDefaultUncaughtExceptionHandler(Main::uncaughtExceptionHandler);
+
       final BuildInfo buildInfo = BuildInfo.fromManifest("tashkewey-netty");
       JvmMetrics.INSTANCE.setBuildInfo(buildInfo);
       Logger.debug("starting {}", buildInfo);
 
       final AtomicBoolean running = new AtomicBoolean(true);
       try (EaserInsights insights = EaserInsights.INSTANCE.open()) {
-        for (final InfluxTelegrafConfig influxConfig: Config.INSTANCE.influxConfig()) {
-          insights.addExporter(
-            InfluxLineExporter.newInfluxExporter(influxConfig.url(), influxConfig.token())
-              .addDefaultDimensions(influxConfig.defaultDimensions())
-          );
-        }
+        setupMetricsExporter(insights, Config.INSTANCE);
 
         try (ServiceEventLoop eloop = new ServiceEventLoop(1, 0)) {
           eloop.getWorkerGroup().scheduleAtFixedRate(Main::collectMetrics, 1, 15, TimeUnit.SECONDS);
@@ -134,7 +154,11 @@ public final class Main {
 
           http.waitStopSignal();
         }
+      } catch (final Throwable e) {
+        Logger.error(e, "uncatched exception. shutting down the service");
       }
+    } catch (final Throwable e) {
+      e.printStackTrace();
     }
   }
 }

@@ -19,6 +19,7 @@ package io.github.matteobertozzi.tashkewey;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -46,7 +47,8 @@ public class Config {
   }
 
   public void load(final Path path) throws IOException {
-    load(JsonUtil.fromJson(path.toFile(), JsonObject.class));
+    final String json = TemplateUtil.processTemplate(Files.readString(path), this::getConfVariable);
+    load(JsonUtil.fromJson(json, JsonObject.class));
   }
 
   public void load(final JsonObject conf) {
@@ -158,11 +160,17 @@ public class Config {
   //  Easer Insights
   // ===========================================================================
   public record InfluxTelegrafConfig(String url, String token, Map<String, String> defaultDimensions) {}
+  public record AwsCloudWatchConfig(String namespace, Map<String, String> defaultDimensions) {}
 
+  private final ArrayList<AwsCloudWatchConfig> awsCloudWatchConfig = new ArrayList<>();
   private final ArrayList<InfluxTelegrafConfig> influxConfig = new ArrayList<>();
 
   public List<InfluxTelegrafConfig> influxConfig() {
     return influxConfig;
+  }
+
+  public List<AwsCloudWatchConfig> awsCloudWatchConfig() {
+    return awsCloudWatchConfig;
   }
 
   private void parseEaserInsightsConfig(final JsonObject conf) {
@@ -175,10 +183,15 @@ public class Config {
       final JsonObject exporter = exporters.get(i).getAsJsonObject();
       switch (exporter.get("type").getAsString()) {
         case "influx.telegraph" -> {
-          final String url = parseConfigValue(exporter.get("url").getAsString());
-          final String token = parseConfigValue(exporter.get("token").getAsString());
+          final String url = exporter.get("url").getAsString();
+          final String token = exporter.get("token").getAsString();
           final Map<String, String> dimensions = parseStringMap(exporter.getAsJsonObject("dimensions"));
           influxConfig.add(new InfluxTelegrafConfig(url, token, dimensions));
+        }
+        case "aws.cloudwatch" -> {
+          final String namespace = exporter.get("namespace").getAsString();
+          final Map<String, String> dimensions = parseStringMap(exporter.getAsJsonObject("dimensions"));
+          awsCloudWatchConfig.add(new AwsCloudWatchConfig(namespace, dimensions));
         }
       }
     }
@@ -191,13 +204,9 @@ public class Config {
 
     final HashMap<String, String> map = HashMap.newHashMap(config.size());
     for (final Entry<String, JsonElement> entry: config.entrySet()) {
-      map.put(parseConfigValue(entry.getKey()), parseConfigValue(entry.getValue().getAsString()));
+      map.put(entry.getKey(), entry.getValue().getAsString());
     }
     return map;
-  }
-
-  private String parseConfigValue(final String value) {
-    return TemplateUtil.processTemplate(value, this::getConfVariable);
   }
 
   private String getConfVariable(final String key) {
