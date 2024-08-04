@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
+import io.github.matteobertozzi.easerinsights.logging.Logger;
 import io.github.matteobertozzi.rednaco.collections.arrays.ArrayUtil;
 import io.github.matteobertozzi.rednaco.data.json.JsonArray;
 import io.github.matteobertozzi.rednaco.data.json.JsonElement;
@@ -39,8 +40,10 @@ import io.github.matteobertozzi.rednaco.strings.StringUtil;
 import io.github.matteobertozzi.rednaco.strings.TemplateUtil;
 import io.github.matteobertozzi.tashkewey.auth.basic.BasicSession;
 
-public class Config {
+public final class Config {
   public static final Config INSTANCE = new Config();
+
+  private final JsonObject rawConfig = new JsonObject();
 
   private Config() {
     // no-op
@@ -52,10 +55,34 @@ public class Config {
   }
 
   public void load(final JsonObject conf) {
+    rawConfig.addAll(conf);
+
     parseBindAddress(conf.getAsJsonObject("bind"));
     parseModules(JsonUtil.fromJson(conf.get("modules"), String[].class));
     parseAuth(conf.getAsJsonObject("auth"));
     parseEaserInsightsConfig(conf.getAsJsonObject("easer.insights"));
+  }
+
+  // ===========================================================================
+  //  Raw values
+  // ===========================================================================
+  public int getInt(final String name, final int defaultValue) {
+    final JsonElement value = rawConfig.get(name);
+    return value != null ? value.getAsInt() : defaultValue;
+  }
+
+  public long getLong(final String name, final long defaultValue) {
+    final JsonElement value = rawConfig.get(name);
+    return value != null ? value.getAsLong() : defaultValue;
+  }
+
+  public String getString(final String name, final String defaultValue) {
+    final JsonElement value = rawConfig.get(name);
+    return value != null ? value.getAsString() : defaultValue;
+  }
+
+  public <T> T get(final String name, final Class<T> classOfT) {
+    return JsonUtil.fromJson(rawConfig.get(name), classOfT);
   }
 
   // ===========================================================================
@@ -69,6 +96,8 @@ public class Config {
 
   private BindAddress bindAddress;
   private void parseBindAddress(final JsonObject confBind) {
+    if (confBind == null || confBind.isEmpty()) return;
+
     this.bindAddress = JsonUtil.fromJson(confBind, BindAddress.class);
   }
 
@@ -86,6 +115,11 @@ public class Config {
   }
 
   private void parseModules(final String[] modules) {
+    if (ArrayUtil.isEmpty(modules)) return;
+
+    if (!this.modules.isEmpty()) {
+      Logger.warn("Replacing modules {} with {}", this.modules, modules);
+    }
     this.modules = Set.of(modules);
   }
 
