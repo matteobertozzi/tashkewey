@@ -71,7 +71,7 @@
     <maven.surefire.version>3.3.1</maven.surefire.version>
     <maven.failsafe.version>3.3.1</maven.failsafe.version>
     <maven.dependency.version>3.7.1</maven.dependency.version>
-    <nexus.staging.maven.version>1.6.14</nexus.staging.maven.version>
+    <nexus.staging.maven.version>1.7.0</nexus.staging.maven.version>
 
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
