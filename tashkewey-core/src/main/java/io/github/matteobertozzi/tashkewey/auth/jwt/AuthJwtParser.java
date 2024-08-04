@@ -47,6 +47,7 @@ import io.github.matteobertozzi.easerinsights.metrics.collectors.Heatmap;
 import io.github.matteobertozzi.easerinsights.metrics.collectors.Histogram;
 import io.github.matteobertozzi.easerinsights.metrics.collectors.TimeRangeCounter;
 import io.github.matteobertozzi.easerinsights.tracing.Span;
+import io.github.matteobertozzi.easerinsights.tracing.TraceAttributes;
 import io.github.matteobertozzi.easerinsights.tracing.Tracer;
 import io.github.matteobertozzi.rednaco.collections.maps.MapUtil;
 import io.github.matteobertozzi.rednaco.dispatcher.message.Message;
@@ -148,6 +149,9 @@ public class AuthJwtParser implements AuthParser, AuthProviderRegistration {
       tokenCache.put(sessionKey, new CachedSession(session, jwt.getIssuer(), jwt.getExpiresAtAsInstant().toEpochMilli()));
       verifyAllowed(message, jwt.getIssuer());
       jwtSessionCreationTime.sample(System.nanoTime() - startTime);
+
+      TraceAttributes.OWNER_ID.set(span.rootSpan(), jwt.getSubject());
+      TraceAttributes.OWNER_NAME.set(span.rootSpan(), jwt.getClaim("email").asString());
       return session;
     } catch (final MessageException e) {
       if (e.getMessageError().statusCode() == 401) {
