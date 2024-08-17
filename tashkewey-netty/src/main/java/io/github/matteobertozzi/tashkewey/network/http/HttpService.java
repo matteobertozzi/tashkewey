@@ -44,8 +44,10 @@ import io.github.matteobertozzi.rednaco.dispatcher.message.MessageUtil.EmptyMess
 import io.github.matteobertozzi.rednaco.dispatcher.message.MessageUtil.ErrorMessage;
 import io.github.matteobertozzi.rednaco.dispatcher.message.MessageUtil.RawMessage;
 import io.github.matteobertozzi.rednaco.dispatcher.message.MessageUtil.TypedMessage;
+import io.github.matteobertozzi.rednaco.strings.Base32;
 import io.github.matteobertozzi.rednaco.strings.HumansUtil;
 import io.github.matteobertozzi.rednaco.strings.StringUtil;
+import io.github.matteobertozzi.rednaco.util.RandData;
 import io.github.matteobertozzi.tashkewey.network.AbstractService;
 import io.github.matteobertozzi.tashkewey.network.ChannelDispatcherContext;
 import io.github.matteobertozzi.tashkewey.network.ChannelStats;
@@ -525,9 +527,11 @@ public class HttpService extends AbstractService {
     return response;
   }
 
+  private static final String INSTANCE_ID = Base32.base32().encode(RandData.generateBytes(16));
   private static void addHttpHeaders(final HttpHeaders httpHeaders, final MessageMetadata metadata, final boolean keepAlive) {
     httpHeaders.set(HttpHeaderNames.CONNECTION, keepAlive ? HttpHeaderValues.KEEP_ALIVE : HttpHeaderValues.CLOSE);
     httpHeaders.set(HttpHeaderNames.DATE, new Date());
+    httpHeaders.set("X-Tashkewey-Id", INSTANCE_ID);
     metadata.forEach((k, v) -> {
       if (k.charAt(0) == ':') return;
       httpHeaders.add(k, v);
