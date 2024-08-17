@@ -46,6 +46,7 @@ import io.github.matteobertozzi.easerinsights.metrics.Metrics;
 import io.github.matteobertozzi.easerinsights.metrics.collectors.Heatmap;
 import io.github.matteobertozzi.easerinsights.metrics.collectors.Histogram;
 import io.github.matteobertozzi.easerinsights.metrics.collectors.TimeRangeCounter;
+import io.github.matteobertozzi.easerinsights.tracing.RootSpan;
 import io.github.matteobertozzi.easerinsights.tracing.Span;
 import io.github.matteobertozzi.easerinsights.tracing.TraceAttributes;
 import io.github.matteobertozzi.easerinsights.tracing.Tracer;
@@ -110,9 +111,9 @@ public class AuthJwtParser implements AuthParser, AuthProviderRegistration {
     .register(Heatmap.newMultiThreaded(12, 1, TimeUnit.HOURS, Histogram.DEFAULT_DURATION_BOUNDS_NS));
 
   private record SessionKey(Class<?> sessionFactory, String token) {}
-  private record CachedSession(AuthSession session, String issuer, long expireAt) {
-    private static final CachedSession INVALID = new CachedSession(null, null, 0);
-    private static final CachedSession EXPIRED = new CachedSession(null, null, 0);
+  private record CachedSession(AuthSession session, String issuer, long expireAt, String ownerId, String owner) {
+    private static final CachedSession INVALID = new CachedSession(null, null, 0, null, null);
+    private static final CachedSession EXPIRED = new CachedSession(null, null, 0, null, null);
     public boolean isExpired() { return this == EXPIRED || System.currentTimeMillis() >= expireAt(); }
     public boolean isBadToken() { return this == INVALID || session == null; }
   }
@@ -125,33 +126,34 @@ public class AuthJwtParser implements AuthParser, AuthProviderRegistration {
   @Override
   public AuthSession getSessionObject(final Message message, final AuthSessionFactory sessionFactory, final Class<?> sessionClassType, final String authType, final String authData) throws MessageException {
     final SessionKey sessionKey = new SessionKey(sessionFactory != null ? sessionFactory.sessionClass() : sessionClassType, authData); // TODO: avoid multiple copies?
-    final String cacheControl = message.metadata().get("Cache-Control");
-    if (StringUtil.isEmpty(cacheControl) || !(cacheControl.equals("no-cache") || cacheControl.contains("must-revalidate"))) {
-      final CachedSession cached = tokenCache.getIfPresent(sessionKey);
-      if (cached != null) {
-        verifyAllowed(message, cached.issuer());
-        jwtSessionFromCache.inc();
-        return sessionFromCache(cached);
-      }
-    }
-
-    jwtSessionNotFromCache.inc();
     try (Span span = Tracer.newThreadLocalSpan()) {
       span.setName("JWT Validation");
 
+      final String cacheControl = message.metadata().get("Cache-Control");
+      if (StringUtil.isEmpty(cacheControl) || !(cacheControl.equals("no-cache") || cacheControl.contains("must-revalidate"))) {
+        final CachedSession cached = tokenCache.getIfPresent(sessionKey);
+        if (cached != null) {
+          jwtSessionFromCache.inc();
+          verifyAllowed(message, cached.issuer());
+          updateRootSpan(span.rootSpan(), cached);
+          return sessionFromCache(cached);
+        }
+      }
+
+      jwtSessionNotFromCache.inc();
       final DecodedJWT jwt = decodeToken(authData);
+      verifyAllowed(message, jwt.getIssuer());
       verifyJwtInfo(jwt);
       verifySignature(jwt);
       jwtValidationTime.sample(span.elapsedNanos());
 
       final long startTime = System.nanoTime();
       final AuthSession session = createJwtSession(sessionFactory, message, jwt);
-      tokenCache.put(sessionKey, new CachedSession(session, jwt.getIssuer(), jwt.getExpiresAtAsInstant().toEpochMilli()));
-      verifyAllowed(message, jwt.getIssuer());
+      final CachedSession cachedSession = new CachedSession(session, jwt.getIssuer(), jwt.getExpiresAtAsInstant().toEpochMilli(), jwt.getSubject(), jwt.getClaim("email").asString());
+      tokenCache.put(sessionKey, cachedSession);
       jwtSessionCreationTime.sample(System.nanoTime() - startTime);
 
-      TraceAttributes.OWNER_ID.set(span.rootSpan(), jwt.getSubject());
-      TraceAttributes.OWNER_NAME.set(span.rootSpan(), jwt.getClaim("email").asString());
+      updateRootSpan(span.rootSpan(), cachedSession);
       return session;
     } catch (final MessageException e) {
       if (e.getMessageError().statusCode() == 401) {
@@ -176,6 +178,11 @@ public class AuthJwtParser implements AuthParser, AuthProviderRegistration {
       return sessionFactory.createSession(message, jwt);
     }
     return JwtSubSession.FACTORY.createSession(message, jwt);
+  }
+
+  private static void updateRootSpan(final RootSpan span, final CachedSession session) {
+    TraceAttributes.OWNER_ID.set(span, session.ownerId());
+    TraceAttributes.OWNER_NAME.set(span, session.owner());
   }
 
   // ==========================================================================================
