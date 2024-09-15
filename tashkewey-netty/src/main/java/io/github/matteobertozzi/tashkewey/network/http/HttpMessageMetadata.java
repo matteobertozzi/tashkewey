@@ -19,7 +19,6 @@ package io.github.matteobertozzi.tashkewey.network.http;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.function.BiConsumer;
 
 import io.github.matteobertozzi.rednaco.dispatcher.message.MessageMetadata;

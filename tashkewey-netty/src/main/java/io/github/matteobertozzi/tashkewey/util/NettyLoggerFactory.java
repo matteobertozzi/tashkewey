@@ -41,7 +41,7 @@ public final class NettyLoggerFactory extends InternalLoggerFactory {
     return new NettyInternalLogger(name);
   }
 
-  private static class NettyInternalLogger implements InternalLogger {
+  private static final class NettyInternalLogger implements InternalLogger {
     private final String name;
 
     private NettyInternalLogger(final String name) {
