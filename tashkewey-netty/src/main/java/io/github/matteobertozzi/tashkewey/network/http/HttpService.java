@@ -202,7 +202,11 @@ public class HttpService extends AbstractService {
           responseBodySizeHisto.sample(httpResponse.content().readableBytes());
           computeHttpResponseStats(httpResponse);
         }
+        case final DefaultFileRegion fileRegion -> {
+          responseBodySizeHisto.sample(fileRegion.count());
+        }
         case final HttpResponse httpResponse -> computeHttpResponseStats(httpResponse);
+        case final LastHttpContent httpResponse -> {}
         default -> Logger.warn("unhandled HTTP WRITE type:{} -> {}", msg.getClass(), msg);
       }
     }
