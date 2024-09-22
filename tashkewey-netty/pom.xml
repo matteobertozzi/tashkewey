@@ -176,6 +176,7 @@
         <configuration>
           <release>21</release>
           <compilerArgs>
+            <arg>-proc:full</arg>
             <arg>-parameters</arg>
             <arg>-Xlint:all</arg>
           </compilerArgs>

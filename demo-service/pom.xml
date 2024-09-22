@@ -113,6 +113,7 @@
         <configuration>
           <release>21</release>
           <compilerArgs>
+            <arg>-proc:full</arg>
             <arg>-parameters</arg>
             <arg>-Xlint:all</arg>
           </compilerArgs>
@@ -134,6 +135,8 @@
               <mode>development</mode>
               <builtBy>${user.name}</builtBy>
               <buildTimestamp>${maven.build.timestamp}</buildTimestamp>
+              <gitBranch>${git.branch}</gitBranch>
+              <gitHash>${git.hash}</gitHash>
             </manifestEntries>
           </archive>
         </configuration>
