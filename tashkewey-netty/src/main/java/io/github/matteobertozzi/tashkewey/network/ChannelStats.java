@@ -16,6 +16,7 @@
  */
 package io.github.matteobertozzi.tashkewey.network;
 
+import io.github.matteobertozzi.easerinsights.logging.Logger;
 import io.github.matteobertozzi.rednaco.strings.HumansUtil;
 import io.github.matteobertozzi.rednaco.strings.StringFormat;
 import io.netty.channel.Channel;
@@ -45,11 +46,11 @@ public class ChannelStats {
 
   public void disconnected() {
     final long disconnectTs = System.nanoTime();
-    System.out.println(StringFormat.namedFormat(" -> client disconnected. {messages} {connectionTime} {bytesReceived} {bytesSent}",
+    Logger.trace("client disconnected. {messages} {connectionTime} {bytesReceived} {bytesSent}",
       messages,
       HumansUtil.humanTimeNanos(disconnectTs - connectionTs),
       HumansUtil.humanBytes(bytesReceived),
-      HumansUtil.humanBytes(bytesSent)));
+      HumansUtil.humanBytes(bytesSent));
   }
 
   public long firstByteTs() { return firstByteTs; }

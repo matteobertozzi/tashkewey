@@ -134,9 +134,10 @@ public class AuthJwtParser implements AuthParser, AuthProviderRegistration {
         final CachedSession cached = tokenCache.getIfPresent(sessionKey);
         if (cached != null) {
           jwtSessionFromCache.inc();
+          final AuthSession session = sessionFromCache(cached);
           verifyAllowed(message, cached.issuer());
           updateRootSpan(span.rootSpan(), cached);
-          return sessionFromCache(cached);
+          return session;
         }
       }
 

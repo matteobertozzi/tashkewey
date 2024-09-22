@@ -22,6 +22,7 @@ import java.util.Date;
 import java.util.concurrent.TimeUnit;
 
 import io.github.matteobertozzi.easerinsights.DatumUnit;
+import io.github.matteobertozzi.easerinsights.EaserInsights;
 import io.github.matteobertozzi.easerinsights.logging.Logger;
 import io.github.matteobertozzi.easerinsights.metrics.Metrics;
 import io.github.matteobertozzi.easerinsights.metrics.collectors.CounterMap;
@@ -31,6 +32,7 @@ import io.github.matteobertozzi.easerinsights.metrics.collectors.TimeRangeCounte
 import io.github.matteobertozzi.easerinsights.metrics.collectors.TopK;
 import io.github.matteobertozzi.easerinsights.tracing.Span;
 import io.github.matteobertozzi.easerinsights.tracing.TraceAttributes;
+import io.github.matteobertozzi.easerinsights.tracing.TraceId;
 import io.github.matteobertozzi.easerinsights.tracing.Tracer;
 import io.github.matteobertozzi.rednaco.data.DataFormat;
 import io.github.matteobertozzi.rednaco.data.JsonFormat;
@@ -44,10 +46,8 @@ import io.github.matteobertozzi.rednaco.dispatcher.message.MessageUtil.EmptyMess
 import io.github.matteobertozzi.rednaco.dispatcher.message.MessageUtil.ErrorMessage;
 import io.github.matteobertozzi.rednaco.dispatcher.message.MessageUtil.RawMessage;
 import io.github.matteobertozzi.rednaco.dispatcher.message.MessageUtil.TypedMessage;
-import io.github.matteobertozzi.rednaco.strings.Base32;
 import io.github.matteobertozzi.rednaco.strings.HumansUtil;
 import io.github.matteobertozzi.rednaco.strings.StringUtil;
-import io.github.matteobertozzi.rednaco.util.RandData;
 import io.github.matteobertozzi.tashkewey.network.AbstractService;
 import io.github.matteobertozzi.tashkewey.network.ChannelDispatcherContext;
 import io.github.matteobertozzi.tashkewey.network.ChannelStats;
@@ -85,6 +85,7 @@ import io.netty.handler.codec.http.cors.CorsConfig;
 import io.netty.handler.codec.http.cors.CorsConfigBuilder;
 import io.netty.handler.codec.http.cors.CorsHandler;
 import io.netty.handler.stream.ChunkedWriteHandler;
+import io.netty.util.AsciiString;
 
 public class HttpService extends AbstractService {
   private static final int DEFAULT_MAX_HTTP_REQUEST_SIZE = (32 << 20);
@@ -283,33 +284,27 @@ public class HttpService extends AbstractService {
 
     @Override
     protected void channelRead0(final ChannelHandlerContext ctx, final FullHttpRequest msg) {
-      try (Span span = Tracer.newRootSpan()) {
-        span.setName("HTTP " + msg.method() + " " + msg.uri());
-        TraceAttributes.HTTP_REQUEST_METHOD.set(span, msg.method().name());
-        TraceAttributes.URL_PATH.set(span, msg.uri());
+      final long now = System.nanoTime();
+      final ChannelStats stats = ChannelStats.get(ctx);
+      if (false) // TODO
+        System.err.println(
+            "First Byte " + HumansUtil.humanTimeNanos(now - stats.firstByteTs())
+          + " - Last Byte " + HumansUtil.humanTimeNanos(now - stats.lastByteTs())
+          + " - Recv Time " + HumansUtil.humanTimeNanos(stats.lastByteTs() - stats.firstByteTs())
+          + " - Parse Time " + HumansUtil.humanTimeNanos(now - stats.lastByteTs())
+          + " - Recv Size " + HumansUtil.humanBytes(stats.bytesReceived())
+      );
 
-        final long now = System.nanoTime();
-        final ChannelStats stats = ChannelStats.get(ctx);
-        if (false) // TODO
-          System.err.println(
-              "First Byte " + HumansUtil.humanTimeNanos(now - stats.firstByteTs())
-            + " - Last Byte " + HumansUtil.humanTimeNanos(now - stats.lastByteTs())
-            + " - Recv Time " + HumansUtil.humanTimeNanos(stats.lastByteTs() - stats.firstByteTs())
-            + " - Parse Time " + HumansUtil.humanTimeNanos(now - stats.lastByteTs())
-            + " - Recv Size " + HumansUtil.humanBytes(stats.bytesReceived())
-        );
+      ttfbDelay.sample(now - stats.firstByteTs());
+      stats.resetReceived();
 
-        ttfbDelay.sample(now - stats.firstByteTs());
-        stats.resetReceived();
+      computeHttpResponseStats(ctx, msg);
 
-        computeHttpResponseStats(ctx, msg);
-
-        addMissingHeaders(msg);
-        if (dispatcherCtx == null) {
-          dispatcherCtx = new HttpDispatcherContext(ctx, dispatcher);
-        }
-        dispatcherCtx.push(msg);
+      addMissingHeaders(msg);
+      if (dispatcherCtx == null) {
+        dispatcherCtx = new HttpDispatcherContext(ctx, dispatcher);
       }
+      dispatcherCtx.push(msg);
     }
 
     private static void addMissingHeaders(final FullHttpRequest request) {
@@ -354,6 +349,7 @@ public class HttpService extends AbstractService {
     private final MessageDispatcher dispatcher;
     private ArrayDeque<FullHttpRequest> queue;
     private DataFormat format;
+    private TraceId traceId;
     private long startTime;
     private boolean keepAlive;
 
@@ -369,16 +365,19 @@ public class HttpService extends AbstractService {
       this.keepAlive = false;
     }
 
+    private TraceId traceId() { return traceId; }
+    private boolean keepAlive() { return keepAlive; }
+
     public void push(final FullHttpRequest msg) {
       // there is no request in progress (or pending requests)
       if (startTime < 0) {
-        //Logger.debug("nothing in queue, execute direct {} {}", msg.method(), msg.uri());
+        Logger.debug("nothing in queue, execute direct {} {}", msg.method(), msg.uri());
         execute(msg);
         return;
       }
 
       if (!keepAlive) {
-        //Logger.debug("client had keepAlive:false (close connection), drop request: {} {}", msg.method(), msg.uri());
+        Logger.debug("client had keepAlive:false (close connection), drop request: {} {}", msg.method(), msg.uri());
         return;
       }
 
@@ -407,16 +406,19 @@ public class HttpService extends AbstractService {
 
     private void execute(final FullHttpRequest msg) {
       this.startTime = System.nanoTime();
-      this.format = MessageUtil.parseAcceptFormat(msg.headers().get(HttpHeaderNames.ACCEPT), JsonFormat.INSTANCE);
-      this.keepAlive = HttpUtil.isKeepAlive(msg);
-      final Message messageResponse = dispatcher.execute(this, new HttpMessageRequest(msg));
-      if (messageResponse != null) {
-        writeMessageResult(this, format, messageResponse);
-      }
-    }
+      try (Span span = Tracer.newRootSpan()) {
+        span.setName("HTTP " + msg.method() + " " + msg.uri());
+        TraceAttributes.HTTP_REQUEST_METHOD.set(span, msg.method().name());
+        TraceAttributes.URL_PATH.set(span, msg.uri());
 
-    private boolean keepAlive() {
-      return keepAlive;
+        this.traceId = span.traceId();
+        this.format = MessageUtil.parseAcceptFormat(msg.headers().get(HttpHeaderNames.ACCEPT), JsonFormat.INSTANCE);
+        this.keepAlive = HttpUtil.isKeepAlive(msg);
+        final Message messageResponse = dispatcher.execute(this, new HttpMessageRequest(msg));
+        if (messageResponse != null) {
+          writeMessageResult(this, format, messageResponse);
+        }
+      }
     }
 
     private void writePartialPacket(final Object response) {
@@ -444,54 +446,54 @@ public class HttpService extends AbstractService {
   private static void writeMessageResult(final HttpDispatcherContext ctx, final DataFormat format, final Message result) {
     try {
       switch (result) {
-        case final RawMessage rawResult -> newRawResonse(ctx, rawResult);
-        case final TypedMessage<?> objResult -> newTypedResponse(ctx, format, objResult);
-        case final EmptyMessage emptyResult -> newEmptyResponse(ctx, emptyResult.metadata());
-        case final ErrorMessage errorResult -> newErrorMessage(ctx, format, errorResult);
-        case final MessageFile fileResult -> newFileResponse(ctx, fileResult);
+        case final RawMessage rawResult -> writeRawResonse(ctx, rawResult);
+        case final TypedMessage<?> objResult -> writeTypedResponse(ctx, format, objResult);
+        case final EmptyMessage emptyResult -> writeEmptyResponse(ctx, emptyResult.metadata());
+        case final ErrorMessage errorResult -> writeErrorMessage(ctx, format, errorResult);
+        case final MessageFile fileResult -> writeFileResponse(ctx, fileResult);
         default -> throw new IllegalArgumentException("unsupported message type: " + result.getClass().getName());
       }
     } catch (final Throwable e) {
       Logger.error(e, "failed to write/encode result");
-      newErrorMessage(ctx, format, MessageUtil.EmptyMetadata.INSTANCE, MessageError.internalServerError());
+      writeErrorMessage(ctx, format, MessageUtil.EmptyMetadata.INSTANCE, MessageError.internalServerError());
     }
   }
 
-  private static void newRawResonse(final HttpDispatcherContext ctx, final RawMessage rawResult) {
+  private static void writeRawResonse(final HttpDispatcherContext ctx, final RawMessage rawResult) {
     final int statusCode = rawResult.metadata().getInt(MessageUtil.METADATA_FOR_HTTP_STATUS, 200);
     final ByteBuf content = rawResult.hasContent() ? Unpooled.wrappedBuffer(rawResult.content()) : Unpooled.EMPTY_BUFFER;
-    final HttpResponse response = newHttpResponse(HttpResponseStatus.valueOf(statusCode), rawResult.metadata(), null, content, ctx.keepAlive());
+    final HttpResponse response = newHttpResponse(HttpResponseStatus.valueOf(statusCode), rawResult.metadata(), null, content, ctx.traceId(), ctx.keepAlive());
     ctx.writeLastPacket(response);
   }
 
-  private static void newTypedResponse(final HttpDispatcherContext ctx, final DataFormat format, final TypedMessage<?> message) {
+  private static void writeTypedResponse(final HttpDispatcherContext ctx, final DataFormat format, final TypedMessage<?> message) {
     final int statusCode = message.metadata().getInt(MessageUtil.METADATA_FOR_HTTP_STATUS, 200);
     final ByteBuf content = ByteBufDataFormatUtil.asBytes(format, message.content());
-    final FullHttpResponse response = newHttpResponse(HttpResponseStatus.valueOf(statusCode), message.metadata(), format, content, ctx.keepAlive());
+    final FullHttpResponse response = newHttpResponse(HttpResponseStatus.valueOf(statusCode), message.metadata(), format, content, ctx.traceId(), ctx.keepAlive());
     ctx.writeLastPacket(response);
   }
 
-  private static void newEmptyResponse(final HttpDispatcherContext ctx, final MessageMetadata metadata) {
+  private static void writeEmptyResponse(final HttpDispatcherContext ctx, final MessageMetadata metadata) {
     final int statusCode = metadata.getInt(MessageUtil.METADATA_FOR_HTTP_STATUS, 204);
-    final FullHttpResponse response = newHttpResponse(HttpResponseStatus.valueOf(statusCode), metadata, null, Unpooled.EMPTY_BUFFER, ctx.keepAlive());
+    final FullHttpResponse response = newHttpResponse(HttpResponseStatus.valueOf(statusCode), metadata, null, Unpooled.EMPTY_BUFFER, ctx.traceId(), ctx.keepAlive());
     ctx.writeLastPacket(response);
   }
 
-  private static void newErrorMessage(final HttpDispatcherContext ctx, final DataFormat format, final ErrorMessage message) {
-    newErrorMessage(ctx, format, message.metadata(), message.error());
+  private static void writeErrorMessage(final HttpDispatcherContext ctx, final DataFormat format, final ErrorMessage message) {
+    writeErrorMessage(ctx, format, message.metadata(), message.error());
   }
 
-  private static void newErrorMessage(final HttpDispatcherContext ctx, final DataFormat format, final MessageMetadata metadata, final MessageError error) {
+  private static void writeErrorMessage(final HttpDispatcherContext ctx, final DataFormat format, final MessageMetadata metadata, final MessageError error) {
     final int statusCode = metadata.getInt(MessageUtil.METADATA_FOR_HTTP_STATUS, error.statusCode());
     final ByteBuf content = ByteBufDataFormatUtil.asBytes(format, error);
-    final FullHttpResponse response = newHttpResponse(HttpResponseStatus.valueOf(statusCode), metadata, format, content, ctx.keepAlive());
+    final FullHttpResponse response = newHttpResponse(HttpResponseStatus.valueOf(statusCode), metadata, format, content, ctx.traceId(), ctx.keepAlive());
     ctx.writeLastPacket(response);
   }
 
-  private static void newFileResponse(final HttpDispatcherContext ctx, final MessageFile file) {
+  private static void writeFileResponse(final HttpDispatcherContext ctx, final MessageFile file) {
     final DefaultHttpResponse response = new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
     final HttpHeaders headers = response.headers();
-    addHttpHeaders(headers, file.metadata(), ctx.keepAlive());
+    addHttpHeaders(headers, file.metadata(), ctx.traceId(), ctx.keepAlive());
     if (!headers.contains(HttpHeaderNames.CONTENT_TYPE)) {
       try {
         headers.set(HttpHeaderNames.CONTENT_TYPE, MimeUtil.INSTANCE.detectMimeType(file.path()));
@@ -521,21 +523,23 @@ public class HttpService extends AbstractService {
   }
 
   private static FullHttpResponse newHttpResponse(final HttpResponseStatus status, final MessageMetadata metadata,
-      final DataFormat format, final ByteBuf content, final boolean keepAlive) {
+      final DataFormat format, final ByteBuf content, final TraceId traceId, final boolean keepAlive) {
     final FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, status, content);
     response.headers().setInt(HttpHeaderNames.CONTENT_LENGTH, content.readableBytes());
     if (format != null) {
       response.headers().set(HttpHeaderNames.CONTENT_TYPE, format.contentType());
     }
-    addHttpHeaders(response.headers(), metadata, keepAlive);
+    addHttpHeaders(response.headers(), metadata, traceId, keepAlive);
     return response;
   }
 
-  private static final String INSTANCE_ID = Base32.base32().encode(RandData.generateBytes(16));
-  private static void addHttpHeaders(final HttpHeaders httpHeaders, final MessageMetadata metadata, final boolean keepAlive) {
+  private static final AsciiString X_TRACE_ID = AsciiString.cached("x-trace-id");
+  private static final AsciiString X_TASHKEWEY_ID = AsciiString.cached("x-tashkewey-id");
+  private static void addHttpHeaders(final HttpHeaders httpHeaders, final MessageMetadata metadata, final TraceId traceId, final boolean keepAlive) {
     httpHeaders.set(HttpHeaderNames.CONNECTION, keepAlive ? HttpHeaderValues.KEEP_ALIVE : HttpHeaderValues.CLOSE);
     httpHeaders.set(HttpHeaderNames.DATE, new Date());
-    httpHeaders.set("X-Tashkewey-Id", INSTANCE_ID);
+    httpHeaders.set(X_TASHKEWEY_ID, EaserInsights.INSTANCE_ID);
+    httpHeaders.set(X_TRACE_ID, traceId.toString());
     metadata.forEach((k, v) -> {
       if (k.charAt(0) == ':') return;
       httpHeaders.add(k, v);
