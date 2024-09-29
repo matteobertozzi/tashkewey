@@ -38,9 +38,10 @@ import io.github.matteobertozzi.rednaco.data.json.JsonUtil;
 import io.github.matteobertozzi.rednaco.dispatcher.session.AuthSessionPermissions;
 import io.github.matteobertozzi.rednaco.strings.StringUtil;
 import io.github.matteobertozzi.rednaco.strings.TemplateUtil;
+import io.github.matteobertozzi.rednaco.util.ConfigProvider;
 import io.github.matteobertozzi.tashkewey.auth.basic.BasicSession;
 
-public final class Config {
+public final class Config implements ConfigProvider {
   public static final Config INSTANCE = new Config();
 
   private final JsonObject rawConfig = new JsonObject();
@@ -66,21 +67,31 @@ public final class Config {
   // ===========================================================================
   //  Raw values
   // ===========================================================================
+  @Override
   public int getInt(final String name, final int defaultValue) {
     final JsonElement value = rawConfig.get(name);
     return value != null ? value.getAsInt() : defaultValue;
   }
 
+  @Override
   public long getLong(final String name, final long defaultValue) {
     final JsonElement value = rawConfig.get(name);
     return value != null ? value.getAsLong() : defaultValue;
   }
 
+  @Override
+  public boolean getBool(final String name, final boolean defaultValue) {
+    final JsonElement value = rawConfig.get(name);
+    return value != null ? value.getAsBoolean() : defaultValue;
+  }
+
+  @Override
   public String getString(final String name, final String defaultValue) {
     final JsonElement value = rawConfig.get(name);
     return value != null ? value.getAsString() : defaultValue;
   }
 
+  @Override
   public <T> T get(final String name, final Class<T> classOfT) {
     return JsonUtil.fromJson(rawConfig.get(name), classOfT);
   }
