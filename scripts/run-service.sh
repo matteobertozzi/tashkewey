@@ -47,4 +47,3 @@ if [ "${IS_AWS_SYS}" = "false" ]; then
 fi
 
 java ${JDK_FLAGS} -cp ${TASHKEWEY_CLASSPATH} io.github.matteobertozzi.tashkewey.Main -c ${TASHKEWEY_SERVICE_ROOT}/config.json
-TAS
