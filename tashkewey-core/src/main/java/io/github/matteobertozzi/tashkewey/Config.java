@@ -51,6 +51,7 @@ public final class Config implements ConfigProvider {
   }
 
   public void load(final Path path) throws IOException {
+    Logger.debug("loading config: {}", path);
     final String json = TemplateUtil.processTemplate(Files.readString(path), this::getConfVariable);
     load(JsonUtil.fromJson(json, JsonObject.class));
   }

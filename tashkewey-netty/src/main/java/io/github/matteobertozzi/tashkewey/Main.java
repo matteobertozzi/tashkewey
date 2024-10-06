@@ -17,15 +17,12 @@
 
 package io.github.matteobertozzi.tashkewey;
 
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.github.matteobertozzi.easerinsights.EaserInsights;
-import io.github.matteobertozzi.easerinsights.aws.cloudwatch.AwsCloudWatchExporter;
-import io.github.matteobertozzi.easerinsights.influx.InfluxLineExporter;
 import io.github.matteobertozzi.easerinsights.jvm.JvmMetrics;
 import io.github.matteobertozzi.easerinsights.logging.Logger;
 import io.github.matteobertozzi.easerinsights.logging.providers.AsyncTextLogWriter;
@@ -45,41 +42,25 @@ import io.github.matteobertozzi.rednaco.threading.StripedLock.Cell;
 import io.github.matteobertozzi.rednaco.threading.ThreadUtil;
 import io.github.matteobertozzi.rednaco.time.TimeUtil;
 import io.github.matteobertozzi.rednaco.util.BuildInfo;
-import io.github.matteobertozzi.tashkewey.Config.AwsCloudWatchConfig;
-import io.github.matteobertozzi.tashkewey.Config.InfluxTelegrafConfig;
 import io.github.matteobertozzi.tashkewey.auth.HttpAuthSessionProvider;
 import io.github.matteobertozzi.tashkewey.eloop.ServiceEventLoop;
 import io.github.matteobertozzi.tashkewey.network.NettyBufAllocatorMetrics;
 import io.github.matteobertozzi.tashkewey.network.http.HttpService;
+import io.github.matteobertozzi.tashkewey.util.MetricsUtil;
 
 public final class Main {
   private Main() {
     // no-op
   }
 
-  private static void collectMetrics() {
+  public static void collectMetrics() {
     try {
+      MetricsUtil.collectMetrics();
+
       final long now = TimeUtil.currentEpochMillis();
-      JvmMetrics.INSTANCE.collect(now);
       NettyBufAllocatorMetrics.INSTANCE.collect(now);
     } catch (final Throwable e) {
       Logger.error(e, "failed to collect metrics");
-    }
-  }
-
-  private static void setupMetricsExporter(final EaserInsights insights, final Config config) throws IOException {
-    for (final InfluxTelegrafConfig influxConfig: config.influxConfig()) {
-      insights.addExporter(
-        InfluxLineExporter.newInfluxExporter(influxConfig.url(), influxConfig.token())
-          .addDefaultDimensions(influxConfig.defaultDimensions())
-      );
-    }
-
-    for (final AwsCloudWatchConfig cloudWatchConfig: config.awsCloudWatchConfig()) {
-      insights.addExporter(AwsCloudWatchExporter.newAwsCloudWatchExporter()
-        .setNamespace(cloudWatchConfig.namespace())
-        .addDefaultDimensions(cloudWatchConfig.defaultDimensions())
-      );
     }
   }
 
@@ -116,11 +97,7 @@ public final class Main {
 
       for (int i = 0; i < args.length; ++i) {
         switch (args[i]) {
-          case "-c" -> {
-            final Path configFile = Path.of(args[++i]);
-            Logger.debug("loading config: {}", configFile);
-            Config.INSTANCE.load(configFile);
-          }
+          case "-c" -> Config.INSTANCE.load(Path.of(args[++i]));
         }
       }
 
@@ -132,7 +109,7 @@ public final class Main {
 
       final AtomicBoolean running = new AtomicBoolean(true);
       try (EaserInsights insights = EaserInsights.INSTANCE.open()) {
-        setupMetricsExporter(insights, Config.INSTANCE);
+        MetricsUtil.setupMetricsExporter(insights, Config.INSTANCE);
 
         try (ServiceEventLoop eloop = new ServiceEventLoop(1, 0)) {
           eloop.getWorkerGroup().scheduleAtFixedRate(Main::collectMetrics, 1, 15, TimeUnit.SECONDS);
