@@ -74,6 +74,7 @@ public final class LambdaDispatcher {
       dispatcher.setAuthSessionProvider(new HttpAuthSessionProvider());
       ServicesPluginLoader.loadServices(dispatcher, Config.INSTANCE.modules());
     } catch (final Throwable e) {
+      this.dispatcher = null; // try to re-init
       throw new RuntimeException(e);
     }
   }

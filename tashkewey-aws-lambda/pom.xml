@@ -65,8 +65,8 @@
     <maven.source.version>3.3.1</maven.source.version>
     <maven.shade.version>3.6.0</maven.shade.version>
     <maven.javadoc.version>3.10.1</maven.javadoc.version>
-    <maven.surefire.version>3.5.0</maven.surefire.version>
-    <maven.failsafe.version>3.5.0</maven.failsafe.version>
+    <maven.surefire.version>3.5.1</maven.surefire.version>
+    <maven.failsafe.version>3.5.1</maven.failsafe.version>
     <maven.dependency.version>3.8.0</maven.dependency.version>
     <nexus.staging.maven.version>1.7.0</nexus.staging.maven.version>
 
@@ -116,6 +116,17 @@
       <scope>test</scope>
     </dependency>
   </dependencies>
+
+  <distributionManagement>
+    <snapshotRepository>
+      <id>ossrh</id>
+      <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
+    </snapshotRepository>
+    <repository>
+      <id>ossrh</id>
+      <url>https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+    </repository>
+  </distributionManagement>
 
   <build>
     <plugins>
