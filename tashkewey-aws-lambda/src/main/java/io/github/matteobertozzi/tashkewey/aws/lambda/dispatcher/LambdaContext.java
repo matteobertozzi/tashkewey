@@ -28,9 +28,11 @@ public class LambdaContext extends DispatcherContext {
   private final CountDownLatch latch = new CountDownLatch(1);
   private final Context context;
   private final TraceId traceId;
+  private final long startTime;
   private Message result;
 
   public LambdaContext(final Context context, final TraceId traceId) {
+    this.startTime = System.nanoTime();
     this.context = context;
     this.traceId = traceId;
   }
@@ -45,6 +47,10 @@ public class LambdaContext extends DispatcherContext {
 
   public boolean keepAlive() {
     return false;
+  }
+
+  public long startNs() {
+    return startTime;
   }
 
   public Message await() {

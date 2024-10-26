@@ -63,13 +63,13 @@ public final class LambdaHttpMessageResponse {
 
   private static void writeRawResonse(final LambdaContext ctx, final LambdaHttpResponseWriter writer, final RawMessage rawResult) {
     final int statusCode = rawResult.metadata().getInt(MessageUtil.METADATA_FOR_HTTP_STATUS, 200);
-    newHttpResponseHead(writer, statusCode, rawResult.metadata(), null, ctx.traceId(), ctx.keepAlive());
+    newHttpResponseHead(ctx, writer, statusCode, rawResult.metadata(), null);
     writer.setHttpBody(rawResult.hasContent() ? rawResult.content() : BytesUtil.EMPTY_BYTES);
   }
 
   private static void writeTypedResponse(final LambdaContext ctx, final LambdaHttpResponseWriter writer, final DataFormat format, final TypedMessage<?> message) {
     final int statusCode = message.metadata().getInt(MessageUtil.METADATA_FOR_HTTP_STATUS, 200);
-    newHttpResponseHead(writer, statusCode, message.metadata(), format, ctx.traceId(), ctx.keepAlive());
+    newHttpResponseHead(ctx, writer, statusCode, message.metadata(), format);
     if (format.isBinary()) {
       writer.setHttpBody(format.asBytes(message.content()));
     } else {
@@ -79,7 +79,7 @@ public final class LambdaHttpMessageResponse {
 
   private static void writeEmptyResponse(final LambdaContext ctx, final LambdaHttpResponseWriter writer, final MessageMetadata metadata) {
     final int statusCode = metadata.getInt(MessageUtil.METADATA_FOR_HTTP_STATUS, 204);
-    newHttpResponseHead(writer, statusCode, metadata, null, ctx.traceId(), ctx.keepAlive());
+    newHttpResponseHead(ctx, writer, statusCode, metadata, null);
   }
 
   private static void writeErrorMessage(final LambdaContext ctx, final LambdaHttpResponseWriter writer, final DataFormat format, final ErrorMessage message) {
@@ -88,7 +88,7 @@ public final class LambdaHttpMessageResponse {
 
   private static void writeErrorMessage(final LambdaContext ctx, final LambdaHttpResponseWriter writer, final DataFormat format, final MessageMetadata metadata, final MessageError error) {
     final int statusCode = metadata.getInt(MessageUtil.METADATA_FOR_HTTP_STATUS, error.statusCode());
-    newHttpResponseHead(writer, statusCode, metadata, format, ctx.traceId(), ctx.keepAlive());
+    newHttpResponseHead(ctx, writer, statusCode, metadata, format);
     if (format.isBinary()) {
       writer.setHttpBody(format.asBytes(error));
     } else {
@@ -101,9 +101,33 @@ public final class LambdaHttpMessageResponse {
   }
 
   private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss z", Locale.ENGLISH).withZone(ZoneId.of("GMT"));
-  private static void newHttpResponseHead(final LambdaHttpResponseWriter writer, final int status, final MessageMetadata metadata,
-      final DataFormat format, final TraceId traceId, final boolean keepAlive) {
-    final HashMap<String, List<String>> headers = new HashMap<>();
+  private static void newHttpResponseHead(final LambdaContext ctx, final LambdaHttpResponseWriter writer, final int status, final MessageMetadata metadata, final DataFormat format) {
+    writer.setHttpStatus(status);
+    if (writer.hasMultiValueHeaderSupport()) {
+      writer.setHttpMultiValueHeaders(prepareMultiValueHeaders(metadata, format, ctx.traceId(), ctx.keepAlive(), ctx.startNs()));
+    } else {
+      writer.setHttpHeaders(prepareHeaders(metadata, format, ctx.traceId(), ctx.keepAlive(), ctx.startNs()));
+    }
+  }
+
+  private static Map<String, String> prepareHeaders(final MessageMetadata metadata,
+      final DataFormat format, final TraceId traceId, final boolean keepAlive, final long startNs) {
+    final HashMap<String, String> headers = HashMap.newHashMap(metadata.size() + 4);
+    metadata.forEach((k, v) -> {
+      if (k.charAt(0) == ':') return;
+      headers.put(k, v);
+    });
+    headers.put("connection", keepAlive ? "keey-alive" : "close");
+    headers.put("date", DATE_FORMATTER.format(ZonedDateTime.now()));
+    headers.put("x-tashkewey-id", EaserInsights.INSTANCE_ID);
+    headers.put("x-trace-id", traceId.toString());
+    headers.put("x-tashkewey-exec-ns", String.valueOf(System.nanoTime() - startNs));
+    return headers;
+  }
+
+  private static Map<String, List<String>> prepareMultiValueHeaders(final MessageMetadata metadata,
+      final DataFormat format, final TraceId traceId, final boolean keepAlive, final long startNs) {
+    final HashMap<String, List<String>> headers = HashMap.newHashMap(metadata.size() + 4);
     metadata.forEach((k, v) -> {
       if (k.charAt(0) == ':') return;
       headers.computeIfAbsent(k, key -> new ArrayList<>()).add(v);
@@ -112,14 +136,17 @@ public final class LambdaHttpMessageResponse {
     headers.put("date", List.of(DATE_FORMATTER.format(ZonedDateTime.now())));
     headers.put("x-tashkewey-id", List.of(EaserInsights.INSTANCE_ID));
     headers.put("x-trace-id", List.of(traceId.toString()));
-
-    writer.setHttpStatus(status);
-    writer.setHttpHeaders(headers);
+    headers.put("x-tashkewey-exec-ns", List.of(String.valueOf(System.nanoTime() - startNs)));
+    return headers;
   }
 
   public interface LambdaHttpResponseWriter {
     void setHttpStatus(int status);
-    void setHttpHeaders(Map<String, List<String>> multiHeaders);
+
+    boolean hasMultiValueHeaderSupport();
+    void setHttpHeaders(Map<String, String> headers);
+    void setHttpMultiValueHeaders(Map<String, List<String>> multiHeaders);
+
     void setHttpBody(String body);
     void setHttpBody(byte[] body);
   }

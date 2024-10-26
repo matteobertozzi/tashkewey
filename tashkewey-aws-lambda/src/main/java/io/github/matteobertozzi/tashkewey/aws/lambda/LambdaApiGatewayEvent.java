@@ -43,8 +43,8 @@ public final class LambdaApiGatewayEvent implements RequestHandler<APIGatewayV2H
 
   @Override
   public APIGatewayV2HTTPResponse handleRequest(final APIGatewayV2HTTPEvent input, final Context context) {
-    final DataFormat dataFormat = MessageUtil.parseAcceptFormat(input.getHeaders().get("accept"), JsonFormat.INSTANCE);
     final LambdaContext ctx = lambdaDispatcher.newContext(context);
+    final DataFormat dataFormat = MessageUtil.parseAcceptFormat(input.getHeaders().get("accept"), JsonFormat.INSTANCE);
     return convert(ctx, dataFormat, lambdaDispatcher.execute(ctx, convert(input)));
   }
 
@@ -64,7 +64,10 @@ public final class LambdaApiGatewayEvent implements RequestHandler<APIGatewayV2H
 
   private record ResponseEventWriter(APIGatewayV2HTTPResponse event) implements LambdaHttpResponseWriter {
     @Override public void setHttpStatus(final int status) { event.setStatusCode(status); }
-    @Override public void setHttpHeaders(final Map<String, List<String>> multiHeaders) { event.setMultiValueHeaders(multiHeaders); }
+
+    @Override public boolean hasMultiValueHeaderSupport() { return true; }
+    @Override public void setHttpHeaders(final Map<String, String> headers) { event.setHeaders(headers); }
+    @Override public void setHttpMultiValueHeaders(final Map<String, List<String>> multiHeaders) { event.setMultiValueHeaders(multiHeaders); }
 
     @Override
     public void setHttpBody(final String body) {
