@@ -56,12 +56,12 @@
 
     <caffeine.version>3.1.8</caffeine.version>
     <jctools.version>4.0.2</jctools.version>
-    <tika.version>2.9.2</tika.version>
+    <tika.version>3.0.0</tika.version>
 
     <jwt.version>4.4.0</jwt.version>
     <jwk.rsa.version>0.22.1</jwk.rsa.version>
 
-    <junit.version>5.11.2</junit.version>
+    <junit.version>5.11.3</junit.version>
 
     <maven.gpg.version>3.2.7</maven.gpg.version>
     <maven.jar.version>3.4.2</maven.jar.version>
@@ -70,7 +70,7 @@
     <maven.javadoc.version>3.10.1</maven.javadoc.version>
     <maven.surefire.version>3.5.1</maven.surefire.version>
     <maven.failsafe.version>3.5.1</maven.failsafe.version>
-    <maven.dependency.version>3.8.0</maven.dependency.version>
+    <maven.dependency.version>3.8.1</maven.dependency.version>
     <nexus.staging.maven.version>1.7.0</nexus.staging.maven.version>
 
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

@@ -3,7 +3,7 @@
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>io.github.matteobertozzi.tashkewey</groupId>
+  <groupId>io.github.matteobertozzi</groupId>
   <artifactId>tashkewey-aws-lambda</artifactId>
   <version>0.1.0-SNAPSHOT</version>
 
@@ -57,7 +57,7 @@
     <aws.lambda.version>1.2.3</aws.lambda.version>
     <aws.lambda.events.version>3.14.0</aws.lambda.events.version>
 
-    <junit.version>5.11.2</junit.version>
+    <junit.version>5.11.3</junit.version>
 
     <maven.gpg.version>3.2.7</maven.gpg.version>
     <maven.jar.version>3.4.2</maven.jar.version>
@@ -67,7 +67,7 @@
     <maven.javadoc.version>3.10.1</maven.javadoc.version>
     <maven.surefire.version>3.5.1</maven.surefire.version>
     <maven.failsafe.version>3.5.1</maven.failsafe.version>
-    <maven.dependency.version>3.8.0</maven.dependency.version>
+    <maven.dependency.version>3.8.1</maven.dependency.version>
     <nexus.staging.maven.version>1.7.0</nexus.staging.maven.version>
 
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -203,18 +203,17 @@
           </execution>
         </executions>
       </plugin>
+      <!--
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
         <version>${maven.shade.version}</version>
         <configuration>
           <createDependencyReducedPom>false</createDependencyReducedPom>
-          <finalName>tashkewey-aws-lambda-shaded</finalName>
           <filters>
             <filter>
               <artifact>*:*</artifact>
               <excludes>
-                <!-- Suppress module-info.class warning-->
                 <exclude>module-info.class</exclude>
               </excludes>
             </filter>
@@ -229,6 +228,7 @@
           </execution>
         </executions>
       </plugin>
+      -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-source-plugin</artifactId>
