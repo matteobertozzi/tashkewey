@@ -6,7 +6,7 @@
 
   <groupId>io.github.matteobertozzi</groupId>
   <artifactId>tashkewey-core</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>0.1.0</version>
 
   <name>tashkewey-core</name>
   <description>Gateway for Tasks - core/common logic.</description>
@@ -51,8 +51,8 @@
   </developers>
 
   <properties>
-    <rednaco.version>3.0.0-SNAPSHOT</rednaco.version>
-    <easer.insights.version>0.1.6-SNAPSHOT</easer.insights.version>
+    <rednaco.version>3.0.0</rednaco.version>
+    <easer.insights.version>1.0.0</easer.insights.version>
 
     <caffeine.version>3.1.8</caffeine.version>
     <jctools.version>4.0.2</jctools.version>

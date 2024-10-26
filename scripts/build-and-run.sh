@@ -17,7 +17,7 @@
 
 set -e
 
-VERSION="0.1.0-SNAPSHOT"
+VERSION="0.1.0"
 
 export PROJECT_IDS="tashkewey-core tashkewey-netty tashkewey-aws-lambda demo-service"
 ./build.sh
