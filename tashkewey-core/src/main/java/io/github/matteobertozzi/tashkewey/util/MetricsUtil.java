@@ -22,6 +22,7 @@ import io.github.matteobertozzi.easerinsights.EaserInsights;
 import io.github.matteobertozzi.easerinsights.aws.cloudwatch.AwsCloudWatchExporter;
 import io.github.matteobertozzi.easerinsights.influx.InfluxLineExporter;
 import io.github.matteobertozzi.easerinsights.jvm.JvmMetrics;
+import io.github.matteobertozzi.easerinsights.logging.Logger;
 import io.github.matteobertozzi.rednaco.time.TimeUtil;
 import io.github.matteobertozzi.tashkewey.Config;
 import io.github.matteobertozzi.tashkewey.Config.AwsCloudWatchConfig;
@@ -34,6 +35,8 @@ public final class MetricsUtil {
 
   public static void setupMetricsExporter(final EaserInsights insights, final Config config) throws IOException {
     for (final InfluxTelegrafConfig influxConfig: config.influxConfig()) {
+      Logger.debug("register influx exporter - {url} {defaultDimensions}",
+        influxConfig.url(), influxConfig.defaultDimensions());
       insights.addExporter(
         InfluxLineExporter.newInfluxExporter(influxConfig.url(), influxConfig.token())
           .addDefaultDimensions(influxConfig.defaultDimensions())
@@ -41,6 +44,8 @@ public final class MetricsUtil {
     }
 
     for (final AwsCloudWatchConfig cloudWatchConfig: config.awsCloudWatchConfig()) {
+      Logger.debug("register aws cloudwatch exporter - {namespace} {defaultDimensions}",
+        cloudWatchConfig.namespace(), cloudWatchConfig.defaultDimensions());
       insights.addExporter(AwsCloudWatchExporter.newAwsCloudWatchExporter()
         .setNamespace(cloudWatchConfig.namespace())
         .addDefaultDimensions(cloudWatchConfig.defaultDimensions())

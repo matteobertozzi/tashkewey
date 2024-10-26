@@ -24,7 +24,7 @@
       }
     ],
     "basic": [
-      { "token": "dXplcjpwYXp3b3Jk", "roles": {"runtime": ["METRICS", "MONITOR"]} }
+      { "token": "dXplcjpwYXp3b3Jk", "roles": {"runtime": ["METRICS", "MONITOR", "JSTACK", "JVM", "PROFILER"]} }
     ]
   },
   "easer.insights": {

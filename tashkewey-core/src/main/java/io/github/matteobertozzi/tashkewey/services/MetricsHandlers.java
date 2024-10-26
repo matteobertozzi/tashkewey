@@ -40,7 +40,6 @@ import io.github.matteobertozzi.rednaco.bytes.BytesUtil;
 import io.github.matteobertozzi.rednaco.bytes.PagedByteArray;
 import io.github.matteobertozzi.rednaco.dispatcher.annotations.execution.InlineFast;
 import io.github.matteobertozzi.rednaco.dispatcher.annotations.session.AllowBasicAuth;
-import io.github.matteobertozzi.rednaco.dispatcher.annotations.session.AllowPublicAccess;
 import io.github.matteobertozzi.rednaco.dispatcher.annotations.session.RequirePermission;
 import io.github.matteobertozzi.rednaco.dispatcher.annotations.uri.UriMapping;
 import io.github.matteobertozzi.rednaco.dispatcher.annotations.uri.UriPrefix;
@@ -67,8 +66,9 @@ public class MetricsHandlers {
     return buildInfo;
   }
 
-  @AllowPublicAccess
+  @AllowBasicAuth
   @UriMapping(uri = "/endpoints")
+  @RequirePermission(module = "runtime", oneOf = "ENDPOINTS")
   public Message endpoints() throws IOException {
     final PagedByteArray builder = new PagedByteArray(4096);
     final Enumeration<URL> resources = Thread.currentThread().getContextClassLoader().getResources("docs/endpoints.yaml");
@@ -123,8 +123,8 @@ public class MetricsHandlers {
 
   @InlineFast
   @AllowBasicAuth
-  @AllowPublicAccess
   @UriMapping(uri = "/traces/data")
+  @RequirePermission(module = "runtime", oneOf = "MONITOR")
   public Traces[] traces() {
     return TraceRecorder.INSTANCE.snapshot();
   }
