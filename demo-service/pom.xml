@@ -6,7 +6,7 @@
 
   <groupId>io.github.matteobertozzi</groupId>
   <artifactId>demo-service</artifactId>
-  <version>0.1.0</version>
+  <version>0.1.1</version>
 
   <name>demo-service</name>
   <description>Tashkewey demo service</description>
@@ -57,9 +57,9 @@
     <maven.jar.version>3.4.2</maven.jar.version>
     <maven.compiler.version>3.13.0</maven.compiler.version>
     <maven.source.version>3.3.1</maven.source.version>
-    <maven.javadoc.version>3.10.0</maven.javadoc.version>
-    <maven.surefire.version>3.5.1</maven.surefire.version>
-    <maven.failsafe.version>3.5.1</maven.failsafe.version>
+    <maven.javadoc.version>3.11.0</maven.javadoc.version>
+    <maven.surefire.version>3.5.2</maven.surefire.version>
+    <maven.failsafe.version>3.5.2</maven.failsafe.version>
     <maven.dependency.version>3.8.1</maven.dependency.version>
     <nexus.staging.maven.version>1.7.0</nexus.staging.maven.version>
 

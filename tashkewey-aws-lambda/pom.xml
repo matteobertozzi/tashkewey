@@ -5,7 +5,7 @@
 
   <groupId>io.github.matteobertozzi</groupId>
   <artifactId>tashkewey-aws-lambda</artifactId>
-  <version>0.1.0</version>
+  <version>0.1.1</version>
 
   <name>tashkewey-aws-lambda</name>
   <description>Gateway for Tasks - AWS Lambda</description>
@@ -53,7 +53,7 @@
 
 
   <properties>
-    <aws.sdk.version>2.28.16</aws.sdk.version>
+    <aws.sdk.version>2.29.6</aws.sdk.version>
     <aws.lambda.version>1.2.3</aws.lambda.version>
     <aws.lambda.events.version>3.14.0</aws.lambda.events.version>
 
@@ -64,9 +64,9 @@
     <maven.compiler.version>3.13.0</maven.compiler.version>
     <maven.source.version>3.3.1</maven.source.version>
     <maven.shade.version>3.6.0</maven.shade.version>
-    <maven.javadoc.version>3.10.1</maven.javadoc.version>
-    <maven.surefire.version>3.5.1</maven.surefire.version>
-    <maven.failsafe.version>3.5.1</maven.failsafe.version>
+    <maven.javadoc.version>3.11.1</maven.javadoc.version>
+    <maven.surefire.version>3.5.2</maven.surefire.version>
+    <maven.failsafe.version>3.5.2</maven.failsafe.version>
     <maven.dependency.version>3.8.1</maven.dependency.version>
     <nexus.staging.maven.version>1.7.0</nexus.staging.maven.version>
 
