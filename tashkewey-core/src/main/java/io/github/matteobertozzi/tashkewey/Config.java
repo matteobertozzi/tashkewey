@@ -18,6 +18,7 @@
 package io.github.matteobertozzi.tashkewey;
 
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -30,6 +31,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 
 import io.github.matteobertozzi.easerinsights.logging.Logger;
+import io.github.matteobertozzi.easerinsights.logging.providers.AsyncTextLogWriter;
 import io.github.matteobertozzi.rednaco.collections.arrays.ArrayUtil;
 import io.github.matteobertozzi.rednaco.data.json.JsonArray;
 import io.github.matteobertozzi.rednaco.data.json.JsonElement;
@@ -39,6 +41,7 @@ import io.github.matteobertozzi.rednaco.dispatcher.session.AuthSessionPermission
 import io.github.matteobertozzi.rednaco.strings.StringUtil;
 import io.github.matteobertozzi.rednaco.strings.TemplateUtil;
 import io.github.matteobertozzi.rednaco.util.ConfigProvider;
+import io.github.matteobertozzi.tashkewey.Config.LoggerConfig.LogFlusherCtor;
 import io.github.matteobertozzi.tashkewey.auth.basic.BasicSession;
 
 public final class Config implements ConfigProvider {
@@ -59,7 +62,6 @@ public final class Config implements ConfigProvider {
   public void load(final JsonObject conf) {
     rawConfig.addAll(conf);
 
-    parseBindAddress(conf.getAsJsonObject("bind"));
     parseModules(JsonUtil.fromJson(conf.get("modules"), String[].class));
     parseAuth(conf.getAsJsonObject("auth"));
     parseEaserInsightsConfig(conf.getAsJsonObject("easer.insights"));
@@ -106,15 +108,8 @@ public final class Config implements ConfigProvider {
     }
   }
 
-  private BindAddress bindAddress;
-  private void parseBindAddress(final JsonObject confBind) {
-    if (confBind == null || confBind.isEmpty()) return;
-
-    this.bindAddress = JsonUtil.fromJson(confBind, BindAddress.class);
-  }
-
   public BindAddress bindAddress() {
-    return bindAddress;
+    return get("bind", BindAddress.class);
   }
 
   // ===========================================================================
@@ -243,6 +238,64 @@ public final class Config implements ConfigProvider {
     }
   }
 
+  // ===========================================================================
+  //  Logger
+  // ===========================================================================
+  public record LoggerConfig (LogType type, int blockSize, LogFlusherCtor[] flushers) {
+    public record LogFlusherCtor(String className, JsonElement[] args) {}
+    public enum LogType { JSON, TEXT }
+  }
+
+  public LoggerConfig logger() {
+    return get("logger", LoggerConfig.class);
+  }
+
+  private static AsyncTextLogWriter.BlockFlusher newLoggerBlockFlusher(final LogFlusherCtor flusherParams) {
+    try {
+      final Class<?> classOfFlusher = Class.forName(flusherParams.className());
+      if (ArrayUtil.isEmpty(flusherParams.args())) {
+        return (AsyncTextLogWriter.BlockFlusher) classOfFlusher.getConstructor().newInstance();
+      }
+
+      final int argsCount = flusherParams.args().length;
+      for (final Constructor<?> ctor: classOfFlusher.getConstructors()) {
+        final Class<?>[] paramTypes = ctor.getParameterTypes();
+        if (paramTypes.length != argsCount) continue;
+
+        final JsonElement[] jsonArgs = flusherParams.args();
+        final Object[] args = new Object[argsCount];
+        for (int i = 0; i < argsCount; ++i) {
+          args[i] = JsonUtil.fromJson(jsonArgs[i], paramTypes[i]);
+        }
+        return (AsyncTextLogWriter.BlockFlusher) ctor.newInstance(args);
+      }
+
+      throw new IllegalArgumentException("unable to find a suitable constructor for: " + flusherParams);
+    } catch (final Throwable e) {
+      throw new RuntimeException("unable to create logger stream block flusher: " + flusherParams, e);
+    }
+  }
+
+  public static List<AsyncTextLogWriter.BlockFlusher> loadLoggerBlockFlushers(final LoggerConfig loggerConfig) {
+    final LogFlusherCtor[] blockFlusherParams = loggerConfig.flushers();
+    if (ArrayUtil.isEmpty(blockFlusherParams)) {
+      return List.of(new AsyncTextLogWriter.StreamBlockFlusher(System.out));
+    }
+
+    final AsyncTextLogWriter.BlockFlusher[] blockFlushers = new AsyncTextLogWriter.BlockFlusher[blockFlusherParams.length];
+    for (int i = 0; i < blockFlushers.length; ++i) {
+      blockFlushers[i] = switch (blockFlusherParams[i].className()) {
+        case "stdout" -> new AsyncTextLogWriter.StreamBlockFlusher(System.out);
+        case "stderr" -> new AsyncTextLogWriter.StreamBlockFlusher(System.err);
+        default -> newLoggerBlockFlusher(blockFlusherParams[i]);
+      };
+    }
+    return List.of(blockFlushers);
+  }
+
+  // ===========================================================================
+  //  Helpers
+  // ===========================================================================
   private Map<String, String> parseStringMap(final JsonObject config) {
     if (config == null || config.isJsonNull() || config.isEmpty()) {
       return Map.of();

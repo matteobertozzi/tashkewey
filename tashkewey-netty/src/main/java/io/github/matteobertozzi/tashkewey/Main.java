@@ -18,6 +18,7 @@
 package io.github.matteobertozzi.tashkewey;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -36,12 +37,13 @@ import io.github.matteobertozzi.easerinsights.tracing.providers.basic.BasicTrace
 import io.github.matteobertozzi.rednaco.data.JsonFormat;
 import io.github.matteobertozzi.rednaco.dispatcher.MessageDispatcher;
 import io.github.matteobertozzi.rednaco.strings.HumansUtil;
-import io.github.matteobertozzi.rednaco.strings.StringUtil;
 import io.github.matteobertozzi.rednaco.threading.ShutdownUtil;
 import io.github.matteobertozzi.rednaco.threading.StripedLock.Cell;
 import io.github.matteobertozzi.rednaco.threading.ThreadUtil;
 import io.github.matteobertozzi.rednaco.time.TimeUtil;
 import io.github.matteobertozzi.rednaco.util.BuildInfo;
+import io.github.matteobertozzi.tashkewey.Config.LoggerConfig;
+import io.github.matteobertozzi.tashkewey.Config.LoggerConfig.LogType;
 import io.github.matteobertozzi.tashkewey.auth.HttpAuthSessionProvider;
 import io.github.matteobertozzi.tashkewey.eloop.ServiceEventLoop;
 import io.github.matteobertozzi.tashkewey.network.NettyBufAllocatorMetrics;
@@ -53,7 +55,7 @@ public final class Main {
     // no-op
   }
 
-  public static void collectMetrics() {
+  private static void collectMetrics() {
     try {
       MetricsUtil.collectMetrics();
 
@@ -64,7 +66,9 @@ public final class Main {
     }
   }
 
-  private static final boolean IS_AWS_SYS = StringUtil.isNotEmpty(System.getenv("ECS_CONTAINER_METADATA_URI"));
+  // ========================================================================================================================
+  //  Logger
+  // ========================================================================================================================
   private static void printJsonLine(final AsyncTextLogWriter asyncWriter, final Object v) {
     final Cell<AsyncTextLogBuffer> cell = asyncWriter.get();
     cell.lock();
@@ -77,31 +81,46 @@ public final class Main {
     }
   }
 
+  private static AsyncTextLogWriter newAsyncLogger() {
+    final LoggerConfig loggerConfig = Config.INSTANCE.logger();
+    Logger.debug("using logger config: {}", loggerConfig);
+    if (loggerConfig == null) {
+      return new AsyncTextLogWriter(System.out, 8192);
+    }
+
+    final List<AsyncTextLogWriter.BlockFlusher> blockFlushers = Config.loadLoggerBlockFlushers(loggerConfig);
+    final AsyncTextLogWriter asyncLogWriter = new AsyncTextLogWriter(blockFlushers, Math.max(loggerConfig.blockSize(), 8192));
+    if (loggerConfig.type() == LogType.JSON) {
+      Logger.setLogProvider(new JsonLogProvider(v -> Main.printJsonLine(asyncLogWriter, v)));
+    } else {
+      //Logger.setLogProvider(TextLogProvider.newAsyncProvider(asyncLogWriter));
+      Logger.setLogProvider(TextLogProvider.newStreamProvider(System.out));
+    }
+    return asyncLogWriter;
+  }
+
   private static void uncaughtExceptionHandler(final Thread thread, final Throwable exception) {
     Logger.error(exception, "Thread {} aborted", thread);
   }
 
+  // ========================================================================================================================
+  //  Main (Tashkewey Netty)
+  // ========================================================================================================================
   public static void main(final String[] args) throws Throwable {
     final long startTime = System.nanoTime();
+    Logger.setLogProvider(TextLogProvider.newStreamProvider(System.out));
 
-    try (final AsyncTextLogWriter asyncLogWriter = new AsyncTextLogWriter(System.out, 8192)) {
-      if (IS_AWS_SYS) {
-        Logger.setLogProvider(new JsonLogProvider(v -> Main.printJsonLine(asyncLogWriter, v)));
-      } else {
-        //Logger.setLogProvider(TextLogProvider.newAsyncProvider(asyncLogWriter));
-        Logger.setLogProvider(TextLogProvider.newStreamProvider(System.out));
+    for (int i = 0; i < args.length; ++i) {
+      switch (args[i]) {
+        case "-c" -> Config.INSTANCE.load(Path.of(args[++i]));
       }
+    }
+
+    try (final AsyncTextLogWriter asyncLogWriter = newAsyncLogger()) {
+      Thread.setDefaultUncaughtExceptionHandler(Main::uncaughtExceptionHandler);
       Tracer.setIdProviders(Hex128RandTraceId.PROVIDER, Base58RandSpanId.PROVIDER);
       Tracer.setTraceProvider(BasicTracer.INSTANCE);
       //NettyLoggerFactory.initializeNettyLogger();
-
-      for (int i = 0; i < args.length; ++i) {
-        switch (args[i]) {
-          case "-c" -> Config.INSTANCE.load(Path.of(args[++i]));
-        }
-      }
-
-      Thread.setDefaultUncaughtExceptionHandler(Main::uncaughtExceptionHandler);
 
       final BuildInfo buildInfo = BuildInfo.fromManifest("tashkewey-netty");
       JvmMetrics.INSTANCE.setBuildInfo(buildInfo);
