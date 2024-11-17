@@ -36,10 +36,11 @@ JDK_FLAGS="${JDK_FLAGS} -Xms16m -Xmx${JAVA_MAX_HEAP_SIZE} -XX:MaxDirectMemorySiz
 #JDK_FLAGS="${JDK_FLAGS} -XX:+PrintFlagsFinal"
 
 # Netty Flags
-JDK_FLAGS="${JDK_FLAGS} -Dio.netty.maxDirectMemory=0"
+JDK_FLAGS="${JDK_FLAGS} -Dio.netty.maxDirectMemory=0 -Dio.netty.allocator.type=adaptive"
 
 # Easer Insights Flags
 JDK_FLAGS="${JDK_FLAGS} -Deaser.insights.jdbc.pool.trace.connections=true -Deaser.insights.jdbc.pool.max.connections.per.thread=2"
+#JDK_FLAGS="${JDK_FLAGS} -Dio.netty.eventLoopThreads=16 -Deaser.insights.jdbc.pool.max.pooled.connections=16"
 
 TASHKEWEY_CLASSPATH="${TASHKEWEY_SERVICE_ROOT}/modules/*:${TASHKEWEY_SERVICE_ROOT}/lib/*"
 if [ "${IS_AWS_SYS}" = "false" ]; then
