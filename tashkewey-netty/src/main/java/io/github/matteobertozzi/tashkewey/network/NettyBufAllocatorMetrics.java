@@ -23,6 +23,9 @@ import io.github.matteobertozzi.easerinsights.logging.Logger;
 import io.github.matteobertozzi.easerinsights.metrics.Metrics;
 import io.github.matteobertozzi.easerinsights.metrics.collectors.MaxAvgTimeRangeGauge;
 import io.github.matteobertozzi.easerinsights.metrics.collectors.TimeRangeCounter;
+import io.netty.buffer.ByteBufAllocator;
+import io.netty.buffer.ByteBufAllocatorMetric;
+import io.netty.buffer.ByteBufAllocatorMetricProvider;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.buffer.PooledByteBufAllocatorMetric;
@@ -78,11 +81,17 @@ public final class NettyBufAllocatorMetrics {
   }
 
   public void collect(final long now) {
-    final PooledByteBufAllocatorMetric pooledByteBufMetrics = PooledByteBufAllocator.DEFAULT.metric();
-    chunkSize.sample(now, pooledByteBufMetrics.chunkSize());
-    usedDirectMemory.sample(now, pooledByteBufMetrics.usedDirectMemory());
-    usedHeapMemory.sample(now, pooledByteBufMetrics.usedHeapMemory());
-    smallCacheSize.sample(now, pooledByteBufMetrics.smallCacheSize());
-    numThreadLocalCaches.sample(now, pooledByteBufMetrics.numThreadLocalCaches());
+    if (ByteBufAllocator.DEFAULT instanceof final PooledByteBufAllocator pooledAllocator) {
+      final PooledByteBufAllocatorMetric pooledByteBufMetrics = pooledAllocator.metric();
+      usedDirectMemory.sample(now, pooledByteBufMetrics.usedDirectMemory());
+      usedHeapMemory.sample(now, pooledByteBufMetrics.usedHeapMemory());
+      chunkSize.sample(now, pooledByteBufMetrics.chunkSize());
+      smallCacheSize.sample(now, pooledByteBufMetrics.smallCacheSize());
+      numThreadLocalCaches.sample(now, pooledByteBufMetrics.numThreadLocalCaches());
+    } else if (ByteBufAllocator.DEFAULT instanceof final ByteBufAllocatorMetricProvider allocator) {
+      final ByteBufAllocatorMetric byteBufMetrics = allocator.metric();
+      usedDirectMemory.sample(now, byteBufMetrics.usedDirectMemory());
+      usedHeapMemory.sample(now, byteBufMetrics.usedHeapMemory());
+    }
   }
 }

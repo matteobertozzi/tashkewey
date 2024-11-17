@@ -40,10 +40,10 @@ import io.github.matteobertozzi.rednaco.data.modules.DataMapperModules;
 import io.github.matteobertozzi.rednaco.io.IOUtil;
 import io.github.matteobertozzi.rednaco.io.RuntimeIOException;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.ByteBufOutputStream;
 import io.netty.buffer.ByteBufUtil;
-import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.buffer.Unpooled;
 
 public final class ByteBufDataFormatUtil {
@@ -52,6 +52,7 @@ public final class ByteBufDataFormatUtil {
       .name("bytebuf_leaks")
       .label("ByteBuf Leaks")
       .register(TimeRangeCounter.newMultiThreaded(60, 1, TimeUnit.HOURS));
+
   static {
     ByteBufUtil.setLeakListener((resType, record) -> {
       Logger.critical("ByteBuf leak {} {}", resType, record);
@@ -77,7 +78,7 @@ public final class ByteBufDataFormatUtil {
   }
 
   public static ByteBuf asBytes(final DataFormat format, final Object obj) {
-    final ByteBuf buffer = PooledByteBufAllocator.DEFAULT.buffer();
+    final ByteBuf buffer = ByteBufAllocator.DEFAULT.buffer();
     ByteBufDataFormatUtil.addToBytes(format, buffer, obj);
     return buffer;
   }
