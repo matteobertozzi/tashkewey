@@ -36,6 +36,8 @@ import io.github.matteobertozzi.rednaco.dispatcher.MessageDispatcher;
 import io.github.matteobertozzi.rednaco.dispatcher.message.Message;
 import io.github.matteobertozzi.rednaco.dispatcher.routing.UriMessage;
 import io.github.matteobertozzi.tashkewey.Config;
+import io.github.matteobertozzi.tashkewey.Config.BindAddress;
+import io.github.matteobertozzi.tashkewey.Config.BindAddress.Cors;
 import io.github.matteobertozzi.tashkewey.ServicesPluginLoader;
 import io.github.matteobertozzi.tashkewey.auth.HttpAuthSessionProvider;
 
@@ -48,17 +50,19 @@ public final class LambdaDispatcher {
   }
 
   private MessageDispatcher dispatcher;
+  private Cors corsConfig;
 
   public LambdaContext newContext(final Context context) {
     Logger.setLogProvider(new JsonLogProvider(new LambdaLogWriter(context)));
-    return new LambdaContext(context, TRACE_ID_PROVIDER.newTraceId());
+    return new LambdaContext(context, corsConfig, TRACE_ID_PROVIDER.newTraceId());
   }
 
   public Message execute(final LambdaContext ctx, final UriMessage message) {
-    Logger.setLogProvider(new JsonLogProvider(new LambdaLogWriter(ctx.context())));
     initDispatcher();
 
     try (final Span span = Tracer.newRootSpan(ctx.traceId(), SPAN_ID_PROVIDER.newSpanId())) {
+      span.setName("HTTP " + message.method() + " " + message.path());
+
       final Message result = dispatcher.execute(ctx, message);
       return result != null ? result : ctx.await();
     }
@@ -69,6 +73,11 @@ public final class LambdaDispatcher {
 
     try {
       Config.INSTANCE.load(Path.of(System.getenv("LAMBDA_TASK_ROOT"), "config.json"));
+      Config.INSTANCE.loadFromSystemProperty();
+      final BindAddress bindAddress = Config.INSTANCE.bindAddress();
+      if (bindAddress != null && bindAddress.hasCorsConfig()) {
+        corsConfig = bindAddress.cors();
+      }
 
       this.dispatcher = new MessageDispatcher(LocalExecutorService.INSTANCE);
       dispatcher.setAuthSessionProvider(new HttpAuthSessionProvider());

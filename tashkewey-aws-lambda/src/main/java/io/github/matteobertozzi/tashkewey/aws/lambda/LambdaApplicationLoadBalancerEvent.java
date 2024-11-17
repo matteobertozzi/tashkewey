@@ -16,18 +16,23 @@
  */
 package io.github.matteobertozzi.tashkewey.aws.lambda;
 
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.ApplicationLoadBalancerRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.ApplicationLoadBalancerResponseEvent;
 
+import io.github.matteobertozzi.rednaco.collections.maps.MapUtil;
 import io.github.matteobertozzi.rednaco.data.DataFormat;
 import io.github.matteobertozzi.rednaco.data.JsonFormat;
 import io.github.matteobertozzi.rednaco.dispatcher.message.Message;
+import io.github.matteobertozzi.rednaco.dispatcher.message.MessageMetadata;
 import io.github.matteobertozzi.rednaco.dispatcher.message.MessageMetadataMap;
 import io.github.matteobertozzi.rednaco.dispatcher.message.MessageUtil;
 import io.github.matteobertozzi.rednaco.dispatcher.routing.UriMessage;
@@ -44,20 +49,51 @@ public final class LambdaApplicationLoadBalancerEvent implements RequestHandler<
   @Override
   public ApplicationLoadBalancerResponseEvent handleRequest(final ApplicationLoadBalancerRequestEvent input, final Context context) {
     final LambdaContext ctx = lambdaDispatcher.newContext(context);
-    final DataFormat dataFormat = MessageUtil.parseAcceptFormat(input.getHeaders().get("accept"), JsonFormat.INSTANCE);
-    return convert(ctx, dataFormat, lambdaDispatcher.execute(ctx, convert(input)));
+    final UriMessage request = convert(input);
+    final String origin = request.metadataValue("origin");
+    final DataFormat dataFormat = MessageUtil.parseAcceptFormat(request.metadata(), JsonFormat.INSTANCE);
+    return convert(ctx, origin, dataFormat, lambdaDispatcher.execute(ctx, request));
   }
 
   private static UriMessage convert(final ApplicationLoadBalancerRequestEvent event) {
     final UriMethod method = UriMethod.valueOf(event.getHttpMethod());
-    final MessageMetadataMap query = MessageMetadataMap.fromMultiMap(event.getMultiValueQueryStringParameters());
-    final MessageMetadataMap headers = MessageMetadataMap.fromMultiMap(event.getMultiValueHeaders());
+    final MessageMetadata query = queryParamsFrom(event);
+    final MessageMetadataMap headers = headersFrom(event);
     return new LambdaHttpMessageRequest(method, event.getPath(), query, headers, event.getBody(), event.getIsBase64Encoded());
   }
 
-  private static ApplicationLoadBalancerResponseEvent convert(final LambdaContext ctx, final DataFormat format, final Message message) {
+  private static MessageMetadata queryParamsFrom(final ApplicationLoadBalancerRequestEvent event) {
+    if (MapUtil.isEmpty(event.getMultiValueQueryStringParameters())) {
+      final Map<String, String> query = event.getQueryStringParameters();
+      if (MapUtil.isEmpty(query)) return MessageUtil.EmptyMetadata.INSTANCE;
+
+      final MessageMetadataMap metadata =  new MessageMetadataMap(query);
+      for (final Entry<String, String> entry: query.entrySet()) {
+        metadata.put(entry.getKey(), URLDecoder.decode(entry.getValue(), StandardCharsets.UTF_8));
+      }
+      return metadata;
+    }
+
+    final Map<String, List<String>> query = event.getMultiValueQueryStringParameters();
+    final MessageMetadataMap metadata =  new MessageMetadataMap(query.size());
+    for (final Entry<String, List<String>> entry: query.entrySet()) {
+      for (final String value: entry.getValue()) {
+        metadata.put(entry.getKey(), value);
+      }
+    }
+    return metadata;
+  }
+
+  private static MessageMetadataMap headersFrom(final ApplicationLoadBalancerRequestEvent event) {
+    if (MapUtil.isEmpty(event.getMultiValueHeaders())) {
+      return new MessageMetadataMap(event.getHeaders());
+    }
+    return MessageMetadataMap.fromMultiMap(event.getMultiValueHeaders());
+  }
+
+  private static ApplicationLoadBalancerResponseEvent convert(final LambdaContext ctx, final String origin, final DataFormat format, final Message message) {
     final ApplicationLoadBalancerResponseEvent resp = new ApplicationLoadBalancerResponseEvent();
-    LambdaHttpMessageResponse.writeMessageResult(ctx, new ResponseEventWriter(resp), format, message);
+    LambdaHttpMessageResponse.writeMessageResult(ctx, new ResponseEventWriter(resp), origin, format, message);
     return resp;
   }
 

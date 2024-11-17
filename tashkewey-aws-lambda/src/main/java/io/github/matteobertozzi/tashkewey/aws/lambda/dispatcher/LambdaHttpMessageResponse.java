@@ -27,8 +27,8 @@ import java.util.Map;
 
 import io.github.matteobertozzi.easerinsights.EaserInsights;
 import io.github.matteobertozzi.easerinsights.logging.Logger;
-import io.github.matteobertozzi.easerinsights.tracing.TraceId;
 import io.github.matteobertozzi.rednaco.bytes.BytesUtil;
+import io.github.matteobertozzi.rednaco.collections.arrays.ArraySearchUtil;
 import io.github.matteobertozzi.rednaco.data.DataFormat;
 import io.github.matteobertozzi.rednaco.dispatcher.message.Message;
 import io.github.matteobertozzi.rednaco.dispatcher.message.MessageError;
@@ -45,31 +45,31 @@ public final class LambdaHttpMessageResponse {
     // no-op
   }
 
-  public static void writeMessageResult(final LambdaContext ctx, final LambdaHttpResponseWriter writer, final DataFormat format, final Message result) {
+  public static void writeMessageResult(final LambdaContext ctx, final LambdaHttpResponseWriter writer, final String origin, final DataFormat format, final Message result) {
     try {
       switch (result) {
-        case final RawMessage rawResult -> writeRawResonse(ctx, writer, rawResult);
-        case final TypedMessage<?> objResult -> writeTypedResponse(ctx, writer, format, objResult);
-        case final EmptyMessage emptyResult -> writeEmptyResponse(ctx, writer, emptyResult.metadata());
-        case final ErrorMessage errorResult -> writeErrorMessage(ctx, writer, format, errorResult);
-        case final MessageFile fileResult -> writeFileResponse(ctx, writer, fileResult);
+        case final RawMessage rawResult -> writeRawResonse(ctx, writer, origin, rawResult);
+        case final TypedMessage<?> objResult -> writeTypedResponse(ctx, writer, origin, format, objResult);
+        case final EmptyMessage emptyResult -> writeEmptyResponse(ctx, writer, origin, emptyResult.metadata());
+        case final ErrorMessage errorResult -> writeErrorMessage(ctx, writer, origin, format, errorResult);
+        case final MessageFile fileResult -> writeFileResponse(ctx, writer, origin, fileResult);
         default -> throw new IllegalArgumentException("unsupported message type: " + result.getClass().getName());
       }
     } catch (final Throwable e) {
       Logger.error(e, "failed to write/encode result");
-      writeErrorMessage(ctx, writer, format, MessageUtil.EmptyMetadata.INSTANCE, MessageError.internalServerError());
+      writeErrorMessage(ctx, writer, origin, format, MessageUtil.EmptyMetadata.INSTANCE, MessageError.internalServerError());
     }
   }
 
-  private static void writeRawResonse(final LambdaContext ctx, final LambdaHttpResponseWriter writer, final RawMessage rawResult) {
+  private static void writeRawResonse(final LambdaContext ctx, final LambdaHttpResponseWriter writer, final String origin, final RawMessage rawResult) {
     final int statusCode = rawResult.metadata().getInt(MessageUtil.METADATA_FOR_HTTP_STATUS, 200);
-    newHttpResponseHead(ctx, writer, statusCode, rawResult.metadata(), null);
+    newHttpResponseHead(ctx, writer, origin, statusCode, rawResult.metadata(), null);
     writer.setHttpBody(rawResult.hasContent() ? rawResult.content() : BytesUtil.EMPTY_BYTES);
   }
 
-  private static void writeTypedResponse(final LambdaContext ctx, final LambdaHttpResponseWriter writer, final DataFormat format, final TypedMessage<?> message) {
+  private static void writeTypedResponse(final LambdaContext ctx, final LambdaHttpResponseWriter writer, final String origin, final DataFormat format, final TypedMessage<?> message) {
     final int statusCode = message.metadata().getInt(MessageUtil.METADATA_FOR_HTTP_STATUS, 200);
-    newHttpResponseHead(ctx, writer, statusCode, message.metadata(), format);
+    newHttpResponseHead(ctx, writer, origin, statusCode, message.metadata(), format);
     if (format.isBinary()) {
       writer.setHttpBody(format.asBytes(message.content()));
     } else {
@@ -77,18 +77,18 @@ public final class LambdaHttpMessageResponse {
     }
   }
 
-  private static void writeEmptyResponse(final LambdaContext ctx, final LambdaHttpResponseWriter writer, final MessageMetadata metadata) {
+  private static void writeEmptyResponse(final LambdaContext ctx, final LambdaHttpResponseWriter writer, final String origin, final MessageMetadata metadata) {
     final int statusCode = metadata.getInt(MessageUtil.METADATA_FOR_HTTP_STATUS, 204);
-    newHttpResponseHead(ctx, writer, statusCode, metadata, null);
+    newHttpResponseHead(ctx, writer, origin, statusCode, metadata, null);
   }
 
-  private static void writeErrorMessage(final LambdaContext ctx, final LambdaHttpResponseWriter writer, final DataFormat format, final ErrorMessage message) {
-    writeErrorMessage(ctx, writer, format, message.metadata(), message.error());
+  private static void writeErrorMessage(final LambdaContext ctx, final LambdaHttpResponseWriter writer, final String origin, final DataFormat format, final ErrorMessage message) {
+    writeErrorMessage(ctx, writer, origin, format, message.metadata(), message.error());
   }
 
-  private static void writeErrorMessage(final LambdaContext ctx, final LambdaHttpResponseWriter writer, final DataFormat format, final MessageMetadata metadata, final MessageError error) {
+  private static void writeErrorMessage(final LambdaContext ctx, final LambdaHttpResponseWriter writer, final String origin, final DataFormat format, final MessageMetadata metadata, final MessageError error) {
     final int statusCode = metadata.getInt(MessageUtil.METADATA_FOR_HTTP_STATUS, error.statusCode());
-    newHttpResponseHead(ctx, writer, statusCode, metadata, format);
+    newHttpResponseHead(ctx, writer, origin, statusCode, metadata, format);
     if (format.isBinary()) {
       writer.setHttpBody(format.asBytes(error));
     } else {
@@ -96,47 +96,67 @@ public final class LambdaHttpMessageResponse {
     }
   }
 
-  private static void writeFileResponse(final LambdaContext ctx, final LambdaHttpResponseWriter writer, final MessageFile fileResult) {
+  private static void writeFileResponse(final LambdaContext ctx, final LambdaHttpResponseWriter writer, final String origin, final MessageFile fileResult) {
     throw new UnsupportedOperationException("Unimplemented method 'writeFileResponse()'");
   }
 
   private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss z", Locale.ENGLISH).withZone(ZoneId.of("GMT"));
-  private static void newHttpResponseHead(final LambdaContext ctx, final LambdaHttpResponseWriter writer, final int status, final MessageMetadata metadata, final DataFormat format) {
+  private static void newHttpResponseHead(final LambdaContext ctx, final LambdaHttpResponseWriter writer, final String origin, final int status, final MessageMetadata metadata, final DataFormat format) {
     writer.setHttpStatus(status);
     if (writer.hasMultiValueHeaderSupport()) {
-      writer.setHttpMultiValueHeaders(prepareMultiValueHeaders(metadata, format, ctx.traceId(), ctx.keepAlive(), ctx.startNs()));
+      writer.setHttpMultiValueHeaders(prepareMultiValueHeaders(ctx, origin, metadata, format));
     } else {
-      writer.setHttpHeaders(prepareHeaders(metadata, format, ctx.traceId(), ctx.keepAlive(), ctx.startNs()));
+      writer.setHttpHeaders(prepareHeaders(ctx, origin, metadata, format));
     }
   }
 
-  private static Map<String, String> prepareHeaders(final MessageMetadata metadata,
-      final DataFormat format, final TraceId traceId, final boolean keepAlive, final long startNs) {
+  private static Map<String, String> prepareHeaders(final LambdaContext ctx, final String origin, final MessageMetadata metadata, final DataFormat format) {
     final HashMap<String, String> headers = HashMap.newHashMap(metadata.size() + 4);
     metadata.forEach((k, v) -> {
       if (k.charAt(0) == ':') return;
       headers.put(k, v);
     });
-    headers.put("connection", keepAlive ? "keey-alive" : "close");
+    if (format != null) {
+      headers.putIfAbsent("content-type", format.contentType());
+    }
+    if (ctx.hasCorsConfig()) {
+      headers.putIfAbsent("Access-Control-Allow-Methods", "*");
+      if (ctx.corsConfig().allowAnyOrigin()) {
+        headers.putIfAbsent("Access-Control-Allow-Origin", "*");
+      } else if (origin != null && ArraySearchUtil.contains(ctx.corsConfig().allowedOrigins(), origin)) {
+        headers.putIfAbsent("Access-Control-Allow-Origin", origin);
+      }
+    }
+    headers.put("connection", ctx.keepAlive() ? "keey-alive" : "close");
     headers.put("date", DATE_FORMATTER.format(ZonedDateTime.now()));
     headers.put("x-tashkewey-id", EaserInsights.INSTANCE_ID);
-    headers.put("x-trace-id", traceId.toString());
-    headers.put("x-tashkewey-exec-ns", String.valueOf(System.nanoTime() - startNs));
+    headers.put("x-trace-id", ctx.traceId().toString());
+    headers.put("x-tashkewey-exec-ns", String.valueOf(System.nanoTime() - ctx.startNs()));
     return headers;
   }
 
-  private static Map<String, List<String>> prepareMultiValueHeaders(final MessageMetadata metadata,
-      final DataFormat format, final TraceId traceId, final boolean keepAlive, final long startNs) {
+  private static Map<String, List<String>> prepareMultiValueHeaders(final LambdaContext ctx, final String origin, final MessageMetadata metadata, final DataFormat format) {
     final HashMap<String, List<String>> headers = HashMap.newHashMap(metadata.size() + 4);
     metadata.forEach((k, v) -> {
       if (k.charAt(0) == ':') return;
       headers.computeIfAbsent(k, key -> new ArrayList<>()).add(v);
     });
-    headers.put("connection", List.of(keepAlive ? "keey-alive" : "close"));
+    if (format != null) {
+      headers.putIfAbsent("content-type", List.of(format.contentType()));
+    }
+    if (ctx.hasCorsConfig()) {
+      headers.putIfAbsent("Access-Control-Allow-Methods", List.of("*"));
+      if (ctx.corsConfig().allowAnyOrigin()) {
+        headers.putIfAbsent("Access-Control-Allow-Origin", List.of("*"));
+      } else if (origin != null && ArraySearchUtil.contains(ctx.corsConfig().allowedOrigins(), origin)) {
+        headers.putIfAbsent("Access-Control-Allow-Origin", List.of(origin));
+      }
+    }
+    headers.put("connection", List.of(ctx.keepAlive() ? "keey-alive" : "close"));
     headers.put("date", List.of(DATE_FORMATTER.format(ZonedDateTime.now())));
     headers.put("x-tashkewey-id", List.of(EaserInsights.INSTANCE_ID));
-    headers.put("x-trace-id", List.of(traceId.toString()));
-    headers.put("x-tashkewey-exec-ns", List.of(String.valueOf(System.nanoTime() - startNs)));
+    headers.put("x-trace-id", List.of(ctx.traceId().toString()));
+    headers.put("x-tashkewey-exec-ns", List.of(String.valueOf(System.nanoTime() - ctx.startNs())));
     return headers;
   }
 

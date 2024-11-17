@@ -2,13 +2,17 @@
   "bind": {
     "host": "0.0.0.0",
     "port": 57025,
-    "url": "https://${ENV_VAR_URL}"
+    "url": "https://${ENV_VAR_URL}",
+    "cors": {
+      "allowAnyOrigin": false,
+      "allowedOrigins": ["*"],
+      "exposedHeaders": []
+    }
   },
   "logger": {
-    "type": "JSON",
+    "type": "TEXT",
     "flushers": [
-      { "className": "stdout" },
-      { "className": "a.b.c.D", "args": [10, {"aaa": "xyz", "bbb": 10}] }
+      { "className": "stdout" }
     ]
   },
   "modules": ["demo-service"],

@@ -88,7 +88,7 @@ import io.netty.handler.stream.ChunkedWriteHandler;
 import io.netty.util.AsciiString;
 
 public class HttpService extends AbstractService {
-  private static final int DEFAULT_MAX_HTTP_REQUEST_SIZE = (32 << 20);
+  public static final int DEFAULT_MAX_HTTP_REQUEST_SIZE = (32 << 20);
 
   private final MessageDispatcher dispatcher;
   private final CorsConfig corsConfig;
@@ -103,8 +103,8 @@ public class HttpService extends AbstractService {
   }
 
   public HttpService(final MessageDispatcher dispatcher,
-      final int maxHttpRequestSize, final boolean enableCors, final String[] corsHeaders) {
-    this(dispatcher, maxHttpRequestSize, enableCors ? newCorsConfig(corsHeaders) : null);
+      final int maxHttpRequestSize, final boolean enableCors, final String[] exposedHeaders) {
+    this(dispatcher, maxHttpRequestSize, enableCors ? newCorsAnyOriginConfig(exposedHeaders) : null);
   }
 
   public HttpService(final MessageDispatcher dispatcher,
@@ -129,7 +129,7 @@ public class HttpService extends AbstractService {
     pipeline.addLast(new HttpFrameHandler(dispatcher));
   }
 
-  private static CorsConfig newCorsConfig(final String[] corsHeaders) {
+  public static CorsConfig newCorsAnyOriginConfig(final String[] exposedHeaders) {
     return CorsConfigBuilder
       .forAnyOrigin()
       .allowNullOrigin()
@@ -137,7 +137,18 @@ public class HttpService extends AbstractService {
       .allowCredentials()
       .allowedRequestMethods(HttpMethod.GET, HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE)
       .allowedRequestHeaders("Authorization", "*")
-      .exposeHeaders(corsHeaders)
+      .exposeHeaders(exposedHeaders)
+      .build();
+  }
+
+  public static CorsConfig newCorsConfig(final String[] allowedOrigins, final String[] exposedHeaders) {
+    return CorsConfigBuilder
+      .forOrigins(allowedOrigins)
+      .maxAge(3600)
+      .allowCredentials()
+      .allowedRequestMethods(HttpMethod.GET, HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE)
+      .allowedRequestHeaders("Authorization", "*")
+      .exposeHeaders(exposedHeaders)
       .build();
   }
 

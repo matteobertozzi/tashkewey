@@ -44,8 +44,10 @@ public final class LambdaApiGatewayEvent implements RequestHandler<APIGatewayV2H
   @Override
   public APIGatewayV2HTTPResponse handleRequest(final APIGatewayV2HTTPEvent input, final Context context) {
     final LambdaContext ctx = lambdaDispatcher.newContext(context);
-    final DataFormat dataFormat = MessageUtil.parseAcceptFormat(input.getHeaders().get("accept"), JsonFormat.INSTANCE);
-    return convert(ctx, dataFormat, lambdaDispatcher.execute(ctx, convert(input)));
+    final UriMessage request = convert(input);
+    final String origin = request.metadataValue("origin");
+    final DataFormat dataFormat = MessageUtil.parseAcceptFormat(request.metadata(), JsonFormat.INSTANCE);
+    return convert(ctx, origin, dataFormat, lambdaDispatcher.execute(ctx, request));
   }
 
   private static UriMessage convert(final APIGatewayV2HTTPEvent event) {
@@ -56,9 +58,9 @@ public final class LambdaApiGatewayEvent implements RequestHandler<APIGatewayV2H
     return new LambdaHttpMessageRequest(method, http.getPath(), query, headers, event.getBody(), event.getIsBase64Encoded());
   }
 
-  private static APIGatewayV2HTTPResponse convert(final LambdaContext ctx, final DataFormat format, final Message message) {
+  private static APIGatewayV2HTTPResponse convert(final LambdaContext ctx, final String origin, final DataFormat format, final Message message) {
     final APIGatewayV2HTTPResponse resp = new APIGatewayV2HTTPResponse();
-    LambdaHttpMessageResponse.writeMessageResult(ctx, new ResponseEventWriter(resp), format, message);
+    LambdaHttpMessageResponse.writeMessageResult(ctx, new ResponseEventWriter(resp), origin, format, message);
     return resp;
   }
 

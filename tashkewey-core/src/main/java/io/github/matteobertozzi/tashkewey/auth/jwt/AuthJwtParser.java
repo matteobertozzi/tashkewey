@@ -106,7 +106,7 @@ public class AuthJwtParser implements AuthParser, AuthProviderRegistration {
 
   private static final Heatmap jwtSessionCreationTime = Metrics.newCollector()
     .unit(DatumUnit.NANOSECONDS)
-    .name("http.auth.jwtk.session.creation.time")
+    .name("http.auth.jwk.session.creation.time")
     .label("HTTP Auth JWT Session Creation Time")
     .register(Heatmap.newMultiThreaded(12, 1, TimeUnit.HOURS, Histogram.DEFAULT_DURATION_BOUNDS_NS));
 
@@ -263,7 +263,7 @@ public class AuthJwtParser implements AuthParser, AuthProviderRegistration {
 
   private static final Heatmap jwkFetchTime = Metrics.newCollector()
       .unit(DatumUnit.NANOSECONDS)
-      .name("http.auth.jwtk.fetch.time")
+      .name("http.auth.jwk.fetch.time")
       .label("HTTP Auth JWK Fetch Time")
       .register(Heatmap.newMultiThreaded(24, 1, TimeUnit.HOURS, Histogram.DEFAULT_DURATION_BOUNDS_NS));
 

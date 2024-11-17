@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -54,9 +55,13 @@ public final class Config implements ConfigProvider {
   }
 
   public void load(final Path path) throws IOException {
-    Logger.debug("loading config: {}", path);
-    final String json = TemplateUtil.processTemplate(Files.readString(path), this::getConfVariable);
-    load(JsonUtil.fromJson(json, JsonObject.class));
+    try {
+      Logger.debug("loading config: {}", path);
+      final String json = TemplateUtil.processTemplate(Files.readString(path), this::getConfVariable);
+      load(JsonUtil.fromJson(json, JsonObject.class));
+    } catch (final NoSuchFileException e) {
+      Logger.warn("unable to find config file: {}", path);
+    }
   }
 
   public void load(final JsonObject conf) {
@@ -65,6 +70,13 @@ public final class Config implements ConfigProvider {
     parseModules(JsonUtil.fromJson(conf.get("modules"), String[].class));
     parseAuth(conf.getAsJsonObject("auth"));
     parseEaserInsightsConfig(conf.getAsJsonObject("easer.insights"));
+  }
+
+  public void loadFromSystemProperty() throws IOException {
+    final List<String> paths = StringUtil.splitAndTrimSkipEmptyLines(System.getProperty("tashkewey.configs"), ',');
+    for (final String path: paths) {
+      load(Path.of(path));
+    }
   }
 
   // ===========================================================================
@@ -102,7 +114,13 @@ public final class Config implements ConfigProvider {
   // ===========================================================================
   //  Bind Address
   // ===========================================================================
-  public record BindAddress(String host, int port, String url) {
+  public record BindAddress(String host, int port, int maxHttpRequestSize, String url, Cors cors) {
+    public record Cors(boolean allowAnyOrigin, String[] allowedOrigins, String[] exposedHeaders) {}
+
+    public boolean hasCorsConfig() {
+      return cors() != null;
+    }
+
     public InetSocketAddress inetSocketAddress() {
       return new InetSocketAddress(host, port);
     }

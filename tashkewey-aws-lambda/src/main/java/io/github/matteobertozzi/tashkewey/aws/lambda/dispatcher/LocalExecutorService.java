@@ -21,11 +21,9 @@ import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 final class LocalExecutorService implements ExecutorService {
   static final LocalExecutorService INSTANCE = new LocalExecutorService();
@@ -50,7 +48,7 @@ final class LocalExecutorService implements ExecutorService {
   @Override public boolean isTerminated() { return false; }
 
   @Override
-  public boolean awaitTermination(final long timeout, final TimeUnit unit) throws InterruptedException {
+  public boolean awaitTermination(final long timeout, final TimeUnit unit) {
     return false;
   }
 
@@ -77,7 +75,7 @@ final class LocalExecutorService implements ExecutorService {
   }
 
   @Override
-  public <T> List<Future<T>> invokeAll(final Collection<? extends Callable<T>> tasks) throws InterruptedException {
+  public <T> List<Future<T>> invokeAll(final Collection<? extends Callable<T>> tasks) {
     final ArrayList<Future<T>> futures = new ArrayList<>(tasks.size());
     for (final Callable<T> task: tasks) {
       try {
@@ -91,21 +89,19 @@ final class LocalExecutorService implements ExecutorService {
   }
 
   @Override
-  public <T> List<Future<T>> invokeAll(final Collection<? extends Callable<T>> tasks, final long timeout, final TimeUnit unit)
-      throws InterruptedException {
+  public <T> List<Future<T>> invokeAll(final Collection<? extends Callable<T>> tasks, final long timeout, final TimeUnit unit) {
     // TODO Auto-generated method stub
     throw new UnsupportedOperationException("Unimplemented method 'invokeAll'");
   }
 
   @Override
-  public <T> T invokeAny(final Collection<? extends Callable<T>> tasks) throws InterruptedException, ExecutionException {
+  public <T> T invokeAny(final Collection<? extends Callable<T>> tasks) {
     // TODO Auto-generated method stub
     throw new UnsupportedOperationException("Unimplemented method 'invokeAny'");
   }
 
   @Override
-  public <T> T invokeAny(final Collection<? extends Callable<T>> tasks, final long timeout, final TimeUnit unit)
-      throws InterruptedException, ExecutionException, TimeoutException {
+  public <T> T invokeAny(final Collection<? extends Callable<T>> tasks, final long timeout, final TimeUnit unit) {
     // TODO Auto-generated method stub
     throw new UnsupportedOperationException("Unimplemented method 'invokeAny'");
   }

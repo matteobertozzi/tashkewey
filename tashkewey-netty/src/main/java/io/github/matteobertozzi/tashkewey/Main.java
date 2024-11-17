@@ -37,11 +37,14 @@ import io.github.matteobertozzi.easerinsights.tracing.providers.basic.BasicTrace
 import io.github.matteobertozzi.rednaco.data.JsonFormat;
 import io.github.matteobertozzi.rednaco.dispatcher.MessageDispatcher;
 import io.github.matteobertozzi.rednaco.strings.HumansUtil;
+import io.github.matteobertozzi.rednaco.strings.StringConverter;
 import io.github.matteobertozzi.rednaco.threading.ShutdownUtil;
 import io.github.matteobertozzi.rednaco.threading.StripedLock.Cell;
 import io.github.matteobertozzi.rednaco.threading.ThreadUtil;
 import io.github.matteobertozzi.rednaco.time.TimeUtil;
 import io.github.matteobertozzi.rednaco.util.BuildInfo;
+import io.github.matteobertozzi.tashkewey.Config.BindAddress;
+import io.github.matteobertozzi.tashkewey.Config.BindAddress.Cors;
 import io.github.matteobertozzi.tashkewey.Config.LoggerConfig;
 import io.github.matteobertozzi.tashkewey.Config.LoggerConfig.LogType;
 import io.github.matteobertozzi.tashkewey.auth.HttpAuthSessionProvider;
@@ -49,6 +52,8 @@ import io.github.matteobertozzi.tashkewey.eloop.ServiceEventLoop;
 import io.github.matteobertozzi.tashkewey.network.NettyBufAllocatorMetrics;
 import io.github.matteobertozzi.tashkewey.network.http.HttpService;
 import io.github.matteobertozzi.tashkewey.util.MetricsUtil;
+import io.github.matteobertozzi.tashkewey.util.NettyLoggerFactory;
+import io.netty.handler.codec.http.cors.CorsConfig;
 
 public final class Main {
   private Main() {
@@ -104,6 +109,30 @@ public final class Main {
   }
 
   // ========================================================================================================================
+  //  Http Server Setup
+  // ========================================================================================================================
+  private static HttpService newHttpService(final ServiceEventLoop eloop, final MessageDispatcher dispatcher) throws InterruptedException {
+    final BindAddress bindAddress = Config.INSTANCE.bindAddress();
+    final CorsConfig corsConfig;
+    if (bindAddress.hasCorsConfig()) {
+      final Cors cors = bindAddress.cors();
+      // public record Cors(boolean allowAnyOrigin, String[] allowedOrigins, String[] exposedHeaders) {}
+      if (cors.allowAnyOrigin()) {
+        corsConfig = HttpService.newCorsAnyOriginConfig(cors.exposedHeaders());
+      } else {
+        corsConfig = HttpService.newCorsConfig(cors.allowedOrigins(), cors.exposedHeaders());
+      }
+    } else {
+      corsConfig = null;
+    }
+
+    final int maxHttpReqSize = bindAddress.maxHttpRequestSize() > 0 ? bindAddress.maxHttpRequestSize() : HttpService.DEFAULT_MAX_HTTP_REQUEST_SIZE;
+    final HttpService http = new HttpService(dispatcher, maxHttpReqSize, corsConfig);
+    http.bindTcpService(eloop, bindAddress.inetSocketAddress());
+    return http;
+  }
+
+  // ========================================================================================================================
   //  Main (Tashkewey Netty)
   // ========================================================================================================================
   public static void main(final String[] args) throws Throwable {
@@ -116,11 +145,15 @@ public final class Main {
       }
     }
 
+    Config.INSTANCE.loadFromSystemProperty();
+
     try (final AsyncTextLogWriter asyncLogWriter = newAsyncLogger()) {
       Thread.setDefaultUncaughtExceptionHandler(Main::uncaughtExceptionHandler);
       Tracer.setIdProviders(Hex128RandTraceId.PROVIDER, Base58RandSpanId.PROVIDER);
       Tracer.setTraceProvider(BasicTracer.INSTANCE);
-      //NettyLoggerFactory.initializeNettyLogger();
+      if (StringConverter.toBoolean(System.getProperty("tashkewey.netty.logs"), false)) {
+        NettyLoggerFactory.initializeNettyLogger();
+      }
 
       final BuildInfo buildInfo = BuildInfo.fromManifest("tashkewey-netty");
       JvmMetrics.INSTANCE.setBuildInfo(buildInfo);
@@ -139,8 +172,7 @@ public final class Main {
           dispatcher.setAuthSessionProvider(new HttpAuthSessionProvider());
           ServicesPluginLoader.loadServices(dispatcher, Config.INSTANCE.modules());
 
-          final HttpService http = new HttpService(dispatcher, true);
-          http.bindTcpService(eloop, Config.INSTANCE.bindAddress().inetSocketAddress());
+          final HttpService http = newHttpService(eloop, dispatcher);
           ShutdownUtil.addShutdownHook("services", running, http);
 
           Logger.info("service up and running: {}", HumansUtil.humanTimeSince(startTime));

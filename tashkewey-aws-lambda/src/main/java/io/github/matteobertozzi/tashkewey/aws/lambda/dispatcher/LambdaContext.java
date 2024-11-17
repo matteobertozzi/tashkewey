@@ -23,16 +23,19 @@ import com.amazonaws.services.lambda.runtime.Context;
 import io.github.matteobertozzi.easerinsights.tracing.TraceId;
 import io.github.matteobertozzi.rednaco.dispatcher.MessageDispatcher.DispatcherContext;
 import io.github.matteobertozzi.rednaco.dispatcher.message.Message;
+import io.github.matteobertozzi.tashkewey.Config.BindAddress.Cors;
 
 public class LambdaContext extends DispatcherContext {
   private final CountDownLatch latch = new CountDownLatch(1);
   private final Context context;
+  private final Cors corsConfig;
   private final TraceId traceId;
   private final long startTime;
   private Message result;
 
-  public LambdaContext(final Context context, final TraceId traceId) {
+  public LambdaContext(final Context context, final Cors corsConfig, final TraceId traceId) {
     this.startTime = System.nanoTime();
+    this.corsConfig = corsConfig;
     this.context = context;
     this.traceId = traceId;
   }
@@ -47,6 +50,14 @@ public class LambdaContext extends DispatcherContext {
 
   public boolean keepAlive() {
     return false;
+  }
+
+  public boolean hasCorsConfig() {
+    return corsConfig != null;
+  }
+
+  public Cors corsConfig() {
+    return corsConfig;
   }
 
   public long startNs() {
