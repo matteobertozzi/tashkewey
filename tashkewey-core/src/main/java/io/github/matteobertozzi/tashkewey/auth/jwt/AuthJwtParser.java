@@ -110,22 +110,31 @@ public class AuthJwtParser implements AuthParser, AuthProviderRegistration {
     .label("HTTP Auth JWT Session Creation Time")
     .register(Heatmap.newMultiThreaded(12, 1, TimeUnit.HOURS, Histogram.DEFAULT_DURATION_BOUNDS_NS));
 
-  private record SessionKey(Class<?> sessionFactory, String token) {}
+  private record SessionKey(Class<?> sessionFactory, Object key, String token) {}
   private record CachedSession(AuthSession session, String issuer, long expireAt, String ownerId, String owner) {
     private static final CachedSession INVALID = new CachedSession(null, null, 0, null, null);
     private static final CachedSession EXPIRED = new CachedSession(null, null, 0, null, null);
     public boolean isExpired() { return this == EXPIRED || System.currentTimeMillis() >= expireAt(); }
     public boolean isBadToken() { return this == INVALID || session == null; }
   }
+
   private final Cache<SessionKey, CachedSession> tokenCache = Caffeine.newBuilder()
     .maximumWeight(1L << 20)
     .expireAfterAccess(5, TimeUnit.MINUTES)
     .weigher((final SessionKey key, final CachedSession session) -> key.token().length())
     .build();
 
+  private SessionKey newSessionKey(final Message message, final AuthSessionFactory sessionFactory, final Class<?> sessionClassType, final String authType, final String authData) {
+    // TODO: avoid multiple copies?
+    if (sessionFactory == null) {
+      return new SessionKey(sessionClassType, null, authData);
+    }
+    return new SessionKey(sessionFactory.sessionClass(), sessionFactory.createSessionKey(message), authData);
+  }
+
   @Override
   public AuthSession getSessionObject(final Message message, final AuthSessionFactory sessionFactory, final Class<?> sessionClassType, final String authType, final String authData) throws MessageException {
-    final SessionKey sessionKey = new SessionKey(sessionFactory != null ? sessionFactory.sessionClass() : sessionClassType, authData); // TODO: avoid multiple copies?
+    final SessionKey sessionKey = newSessionKey(message, sessionFactory, sessionClassType, authType, authData);
     try (Span span = Tracer.newThreadLocalSpan()) {
       span.setName("JWT Validation");
 
@@ -368,4 +377,3 @@ public class AuthJwtParser implements AuthParser, AuthProviderRegistration {
     }
   }
 }
-
