@@ -5,7 +5,7 @@
 
   <groupId>io.github.matteobertozzi</groupId>
   <artifactId>tashkewey-aws-lambda</artifactId>
-  <version>0.1.3</version>
+  <version>0.1.4</version>
 
   <name>tashkewey-aws-lambda</name>
   <description>Gateway for Tasks - AWS Lambda</description>
