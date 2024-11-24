@@ -235,7 +235,7 @@ public abstract class AbstractService implements ShutdownUtil.StopSignal {
     @Override
     public void exceptionCaught(final ChannelHandlerContext ctx, final Throwable cause) {
       final Channel channel = ctx.channel();
-      Logger.error(cause, "uncaught exception: {} {}", channelType(channel), channel.remoteAddress());
+      Logger.debug(cause, "uncaught exception: {} {}", channelType(channel), channel.remoteAddress());
       ctx.close();
     }
   }
