@@ -6,7 +6,7 @@
 
   <groupId>io.github.matteobertozzi</groupId>
   <artifactId>demo-service</artifactId>
-  <version>0.1.6</version>
+  <version>0.1.7</version>
 
   <name>demo-service</name>
   <description>Tashkewey demo service</description>
@@ -51,7 +51,7 @@
   </developers>
 
   <properties>
-    <junit.version>5.11.3</junit.version>
+    <junit.version>5.11.4</junit.version>
 
     <maven.gpg.version>3.2.4</maven.gpg.version>
     <maven.jar.version>3.4.2</maven.jar.version>
