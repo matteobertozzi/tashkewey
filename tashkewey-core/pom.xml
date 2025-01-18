@@ -6,7 +6,7 @@
 
   <groupId>io.github.matteobertozzi</groupId>
   <artifactId>tashkewey-core</artifactId>
-  <version>0.1.7</version>
+  <version>0.1.8</version>
 
   <name>tashkewey-core</name>
   <description>Gateway for Tasks - core/common logic.</description>
