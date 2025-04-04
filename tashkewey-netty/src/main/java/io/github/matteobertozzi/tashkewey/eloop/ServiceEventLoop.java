@@ -26,20 +26,22 @@ import io.github.matteobertozzi.rednaco.threading.NamedThreadFactory;
 import io.github.matteobertozzi.rednaco.time.TimeUtil;
 import io.netty.channel.Channel;
 import io.netty.channel.EventLoopGroup;
+import io.netty.channel.IoHandlerFactory;
+import io.netty.channel.MultiThreadIoEventLoopGroup;
 import io.netty.channel.ServerChannel;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollDomainSocketChannel;
-import io.netty.channel.epoll.EpollEventLoopGroup;
+import io.netty.channel.epoll.EpollIoHandler;
 import io.netty.channel.epoll.EpollServerDomainSocketChannel;
 import io.netty.channel.epoll.EpollServerSocketChannel;
 import io.netty.channel.epoll.EpollSocketChannel;
 import io.netty.channel.kqueue.KQueue;
 import io.netty.channel.kqueue.KQueueDomainSocketChannel;
-import io.netty.channel.kqueue.KQueueEventLoopGroup;
+import io.netty.channel.kqueue.KQueueIoHandler;
 import io.netty.channel.kqueue.KQueueServerDomainSocketChannel;
 import io.netty.channel.kqueue.KQueueServerSocketChannel;
 import io.netty.channel.kqueue.KQueueSocketChannel;
-import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.nio.NioIoHandler;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.util.concurrent.DefaultThreadFactory;
@@ -143,19 +145,12 @@ public class ServiceEventLoop implements AutoCloseable {
   }
 
   private static EventLoopGroup newEventLoop(final EventLoopType type, final String name, final int nThreads) {
-    /* Netty 4.2
     final IoHandlerFactory ioFactory = switch (type) {
       case EPOLL -> EpollIoHandler.newFactory();
       case KQUEUE -> KQueueIoHandler.newFactory();
       case NIO -> NioIoHandler.newFactory();
     };
     return new MultiThreadIoEventLoopGroup(nThreads, new DefaultThreadFactory(type.name().toLowerCase() + "-" + name), ioFactory);
-    */
-    return switch (type) {
-      case EPOLL -> new EpollEventLoopGroup(nThreads, new DefaultThreadFactory("xepoll-" + name));
-      case KQUEUE -> new KQueueEventLoopGroup(nThreads, new DefaultThreadFactory("xkqueue-" + name));
-      case NIO -> new NioEventLoopGroup(nThreads, new DefaultThreadFactory("xnio-" + name));
-    };
   }
 
   public Class<? extends ServerChannel> getServerUnixChannelClass() {

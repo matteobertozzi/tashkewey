@@ -6,7 +6,7 @@
 
   <groupId>io.github.matteobertozzi</groupId>
   <artifactId>tashkewey-netty</artifactId>
-  <version>0.1.10</version>
+  <version>0.2.0</version>
 
   <name>tashkewey-netty</name>
   <description>Gateway for Tasks - Netty Server</description>
@@ -51,7 +51,7 @@
   </developers>
 
   <properties>
-    <netty.version>4.1.119.Final</netty.version>
+    <netty.version>4.2.0.Final</netty.version>
     <swagger.version>2.1.21</swagger.version>
 
     <junit.version>5.12.1</junit.version>
