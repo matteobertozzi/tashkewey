@@ -6,7 +6,7 @@
 
   <groupId>io.github.matteobertozzi</groupId>
   <artifactId>tashkewey-netty</artifactId>
-  <version>0.1.9</version>
+  <version>0.1.10</version>
 
   <name>tashkewey-netty</name>
   <description>Gateway for Tasks - Netty Server</description>
@@ -51,18 +51,18 @@
   </developers>
 
   <properties>
-    <netty.version>4.1.118.Final</netty.version>
+    <netty.version>4.1.119.Final</netty.version>
     <swagger.version>2.1.21</swagger.version>
 
-    <junit.version>5.11.4</junit.version>
+    <junit.version>5.12.1</junit.version>
 
     <maven.gpg.version>3.2.7</maven.gpg.version>
     <maven.jar.version>3.4.2</maven.jar.version>
-    <maven.compiler.version>3.13.0</maven.compiler.version>
+    <maven.compiler.version>3.14.0</maven.compiler.version>
     <maven.source.version>3.3.1</maven.source.version>
     <maven.javadoc.version>3.11.2</maven.javadoc.version>
-    <maven.surefire.version>3.5.2</maven.surefire.version>
-    <maven.failsafe.version>3.5.2</maven.failsafe.version>
+    <maven.surefire.version>3.5.3</maven.surefire.version>
+    <maven.failsafe.version>3.5.3</maven.failsafe.version>
     <maven.dependency.version>3.8.1</maven.dependency.version>
     <nexus.staging.maven.version>1.7.0</nexus.staging.maven.version>
 
